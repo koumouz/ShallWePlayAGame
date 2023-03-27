@@ -10,29 +10,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         typeText(0);
     } else {
         // Start the game
-        const response = await initGame();
-
-        outputElement.innerHTML = `
-            <div>${response}</div>
-        `;
-        scrollToBottom();
-
-        inputElement.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                processCommand(inputElement.value);
-                inputElement.value = 'Loading, Please Wait...';
-            }
-        });
+        initGame();
     }
 });
 
 async function initGame() {
-    let result = await makeRequest('/api/initGame');
-    turnHistory.push({"role": "assistant", "content": result});
-    generateImage('A mysterious island at twilight surrounded by fog with a small boat pulling up to it. Black and white');
+    let response = await makeRequest('/api/initGame');
+    turnHistory.push({"role": "assistant", "content": response.text});
 
-    return result;
+    outputElement.innerHTML = `
+        <div>${response.text}</div>
+    `;
+    scrollToBottom();
+
+    inputElement.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            processCommand(inputElement.value);
+            inputElement.value = 'Loading, Please Wait...';
+        }
+    });
 }
 
 async function generateNextTurn(prompt) {
@@ -47,44 +44,6 @@ async function generateNextTurn(prompt) {
 
     return result;
 }
-
-async function generateImage(prompt) {
-    const body = JSON.stringify({ prompt: prompt });
-
-    try {
-        const response = await fetch('/api/generateImage', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: body,
-        });
-
-        const imageData = await response.blob(); // Use response.blob() since the server returns a binary image
-        const imageElement = document.getElementById('fixed-image');
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-
-        canvas.width = 800;
-        canvas.height = 250;
-
-        const tempImage = new Image();
-        tempImage.src = URL.createObjectURL(imageData);
-        tempImage.onload = function () {
-            // Calculate the scale factor and new height to maintain the aspect ratio
-            const scaleFactor = 800 / tempImage.width;
-            const newHeight = tempImage.height * scaleFactor;
-
-            // Calculate the vertical offset to crop the image at the vertical center
-            const yOffset = (newHeight - 50) / 2;
-
-            // Draw the image scaled and cropped
-            ctx.drawImage(tempImage, 0, -yOffset, 800, newHeight);
-            imageElement.src = canvas.toDataURL();
-        };
-    } catch (error) {
-        console.error('Error generating image:', error);
-    }
-}
-
 
 async function makeRequest(url, body) {
     const headers = {
@@ -107,15 +66,41 @@ async function makeRequest(url, body) {
 }
 
 async function processCommand(command) {
-    let result = await generateNextTurn(command);
+    let response = await generateNextTurn(command);
 
+    // Update the image
+    const imageBuffer = new Uint8Array(response.image.data);
+    const blob = new Blob([imageBuffer], { type: 'image/png' });
+    const imageElement = document.getElementById('fixed-image');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = 800;
+    canvas.height = 250;
+
+    const tempImage = new Image();
+    tempImage.src = URL.createObjectURL(blob);
+    tempImage.onload = function () {
+        // Calculate the scale factor and new height to maintain the aspect ratio
+        const scaleFactor = 800 / tempImage.width;
+        const newHeight = tempImage.height * scaleFactor;
+
+        // Calculate the vertical offset to crop the image at the vertical center
+        const yOffset = (newHeight - 50) / 2;
+
+        // Draw the image scaled and cropped
+        ctx.drawImage(tempImage, 0, -yOffset, 800, newHeight);
+        imageElement.src = canvas.toDataURL();
+    };
+
+    // Update the text
     inputElement.value = '';
     outputElement.innerHTML += `
         <div class="input-line">
             <div class="prompt">>></div>
             <div>${command}</div>
         </div>
-        <div>${result}</div>
+        <div>${response.text}</div>
     `;
     scrollToBottom();
 }

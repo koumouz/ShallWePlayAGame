@@ -48,6 +48,7 @@ app.post('/api/generateNextTurn', async (req, res) => {
 
     try {
         const response = await generateNextTurn(turnHistory);
+        res.type('application/json');
         res.send({ response });
     } catch (error) {
         console.error('Error communicating with OpenAI API:', error);
@@ -77,6 +78,8 @@ let gamePrompt = "You are an interface for a text-based video game in the style 
 gamePrompt += "The story begins as we all step foot off the rowboat we used to reach the island. It’s twilight and we are excited to begin our adventure. Begin the first turn with a short introduction of all the characters, including me and explain the setting.";
 gamePrompt += "Only answer prompts that are related to the story. If you receive a prompt for any other topic or question, refuse to answer it and guide me back to asking about the story."
 
+let imagePrompt = "A mysterious island at twilight surrounded by fog with a small boat pulling up to it. Black and white"
+
 async function initGame() {
     let initHistory = [];
     initHistory.push({"role": "assistant", "content": gamePrompt});
@@ -85,74 +88,66 @@ async function initGame() {
 
 async function generateNextTurn(history) {
     const apiKey = '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';
-    const url = 'https://api.openai.com/v1/chat/completions';
-
+    const textURL = 'https://api.openai.com/v1/chat/completions';
+    const imageURL = 'https://api.openai.com/v1/images/generations';
     const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
     };
 
-    const body = JSON.stringify({
+    // Generate the text
+    const textRequestBody = JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages: history,
-        max_tokens: 350,
+        max_tokens: 10,
         n: 1,
         stop: null,
         temperature: 0.5,
     });
 
-    const response = await fetch(url, {
+    const textResponse = await fetch(textURL, {
         method: 'POST',
         headers: headers,
-        body: body,
+        body: textRequestBody,
     });
 
+    const textData = await textResponse.json();
 
-    //console.log("\nSending: " + JSON.stringify(body));
-    const data = await response.json();
-
-    if (!data.choices || data.choices.length === 0) {
-        console.error('Unexpected API response:', data);
+    if (!textData.choices || textData.choices.length === 0) {
+        console.error('Unexpected API response:', textData);
         throw new Error('Invalid response from OpenAI API');
     }
 
-    //console.log("\nReceived: " + JSON.stringify(data));
-    return data.choices[0].message.content.trim();
-}
-
-async function generateImage(prompt) {
-    const apiKey = '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';
-    const url = 'https://api.openai.com/v1/images/generations';
-
-    console.log('Prompt: ' + prompt);
-
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-    };
-
-    const body = JSON.stringify({
+    // Now generate the image
+    const imageRequestBody = JSON.stringify({
         model: 'image-alpha-001',
-        prompt: prompt,
+        prompt: imagePrompt,
         num_images: 1,
         size: '512x512',
         response_format: 'url',
     });
 
-    const response = await fetch(url, {
+    const imageResponse = await fetch(imageURL, {
         method: 'POST',
         headers: headers,
-        body: body,
+        body: imageRequestBody,
     });
 
-    const data = await response.json();
+    const imageData = await imageResponse.json();
 
-    if (!data.data || data.data.length === 0) {
-        console.error('Unexpected API response:', data);
+    if (!imageData.data || imageData.data.length === 0) {
+        console.error('Unexpected API response:', data.image);
         throw new Error('Invalid response from DALL-E API');
     }
 
-    return data.data[0].url;
+    const imageBufferResponse = await fetch(imageData.data[0].url);
+    const imageBuffer = await imageBufferResponse.arrayBuffer();
+
+    // Return the whole thing in a nice structured way
+    let payload = {};
+    payload.text = textData.choices[0].message.content.trim();
+    payload.image = Buffer.from(imageBuffer);
+    return payload;
 }
 
 app.listen(port, () => {
