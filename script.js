@@ -58,31 +58,33 @@ async function generateImage(prompt) {
             body: body,
         });
 
-        const imageData = await response.blob();
-        const imageURL = URL.createObjectURL(data);
+        const imageData = await response.blob(); // Use response.blob() since the server returns a binary image
         const imageElement = document.getElementById('fixed-image');
-        imageElement.src = imageURL;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 800;
+        canvas.height = 250;
+
+        const tempImage = new Image();
+        tempImage.src = URL.createObjectURL(imageData);
+        tempImage.onload = function () {
+            // Calculate the scale factor and new height to maintain the aspect ratio
+            const scaleFactor = 800 / tempImage.width;
+            const newHeight = tempImage.height * scaleFactor;
+
+            // Calculate the vertical offset to crop the image at the vertical center
+            const yOffset = (newHeight - 50) / 2;
+
+            // Draw the image scaled and cropped
+            ctx.drawImage(tempImage, 0, -yOffset, 800, newHeight);
+            imageElement.src = canvas.toDataURL();
+        };
     } catch (error) {
         console.error('Error generating image:', error);
     }
-
-/*
-    const imageData = await makeRequest('/api/generateImage');
-    const imageElement = document.getElementById('fixed-image');
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-
-    canvas.width = 800;
-    canvas.height = 250;
-
-    const tempImage = new Image();
-    tempImage.src = imageData.image;
-    tempImage.onload = function () {
-        ctx.drawImage(tempImage, 0, 0, 800, 250);
-        imageElement.src = canvas.toDataURL();
-    };
-*/
 }
+
 
 async function makeRequest(url, body) {
     const headers = {

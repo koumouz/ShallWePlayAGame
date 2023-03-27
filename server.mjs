@@ -124,6 +124,8 @@ async function generateImage(prompt) {
     const apiKey = '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';
     const url = 'https://api.openai.com/v1/images/generations';
 
+    console.log('Prompt: ' + prompt);
+
     const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
