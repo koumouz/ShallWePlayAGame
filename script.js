@@ -48,7 +48,7 @@ async function generateNextTurn(prompt) {
     });
 
     let result = await makeRequest('/api/generateNextTurn', body);
-    turnHistory.push({"role": "assistant", "content": result});
+    turnHistory.push({"role": "assistant", "content": result.text});
 
     return result;
 }
@@ -76,30 +76,33 @@ async function makeRequest(url, body) {
 async function processCommand(command) {
     let response = await generateNextTurn(command);
 
-    // Update the image
-    const imageBuffer = new Uint8Array(response.image.data);
-    const blob = new Blob([imageBuffer], { type: 'image/png' });
-    const imageElement = document.getElementById('fixed-image');
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    if(response.image !== undefined) {
+        // Update the image
+        const imageBuffer = new Uint8Array(response.image.data);
+        const blob = new Blob([imageBuffer], { type: 'image/png' });
+        const imageElement = document.getElementById('fixed-image');
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
 
-    canvas.width = 800;
-    canvas.height = 250;
+        canvas.width = 800;
+        canvas.height = 800;
 
-    const tempImage = new Image();
-    tempImage.src = URL.createObjectURL(blob);
-    tempImage.onload = function () {
-        // Calculate the scale factor and new height to maintain the aspect ratio
-        const scaleFactor = 800 / tempImage.width;
-        const newHeight = tempImage.height * scaleFactor;
+        const tempImage = new Image();
+        tempImage.src = URL.createObjectURL(blob);
+        tempImage.onload = function () {
+            // Calculate the scale factor and new height to maintain the aspect ratio
+            const scaleFactor = 800 / tempImage.width;
+            const newHeight = tempImage.height * scaleFactor;
 
-        // Calculate the vertical offset to crop the image at the vertical center
-        const yOffset = (newHeight - 50) / 2;
+            // Calculate the vertical offset to crop the image at the vertical center
+            //const yOffset = (newHeight - 50) / 2;
+            const yOffset = 0;
 
-        // Draw the image scaled and cropped
-        ctx.drawImage(tempImage, 0, -yOffset, 800, newHeight);
-        imageElement.src = canvas.toDataURL();
-    };
+            // Draw the image scaled and cropped
+            ctx.drawImage(tempImage, 0, -yOffset, 800, newHeight);
+            imageElement.src = canvas.toDataURL();
+        };
+    }
 
     // Update the text
     inputElement.value = '';
@@ -107,9 +110,9 @@ async function processCommand(command) {
     outputElement.innerHTML += `
         <div class="input-line">
             <div class="prompt">>></div>
-            <div>${command}</div>
+            <div>${command.trim()}</div>
         </div>
-        <div>${response.text}</div>
+        <div>${response.text.trim()}</div>
     `;
     scrollToBottom();
 }
@@ -148,5 +151,4 @@ function handleNoButtonClick() {
 function scrollToBottom() {
     const terminal = document.getElementById('terminal');
     terminal.scrollTo(0, terminal.scrollHeight);
-    console.log("scrolling");
 }
