@@ -3,19 +3,25 @@ const outputElement = document.getElementById('output');
 const turnHistory = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const response = await initGame();
+    if (document.getElementById('typed-text')) {
+        // Display out quick intro
+        typeText(0);
+    } else {
+        // Start the game
+        const response = await initGame();
 
-    outputElement.innerHTML = `
-        <div>${response}</div>
-    `;
-    scrollToBottom();
-});
+        outputElement.innerHTML = `
+            <div>${response}</div>
+        `;
+        scrollToBottom();
 
-inputElement.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-        event.preventDefault();
-        processCommand(inputElement.value);
-        inputElement.value = 'Loading, Please Wait...';
+        inputElement.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                processCommand(inputElement.value);
+                inputElement.value = 'Loading, Please Wait...';
+            }
+        });
     }
 });
 
@@ -73,6 +79,40 @@ async function processCommand(command) {
     scrollToBottom();
 }
 
+const typedTextElement = document.getElementById('typed-text');
+
+const text = 'Would you like to play a game?';
+
+function typeText(index) {
+    if (index < text.length) {
+        typedTextElement.textContent += text[index];
+        setTimeout(() => typeText(index + 1), 100);
+    } else {
+        showOptions();
+    }
+}
+
+function showOptions() {
+    const yesButton = document.createElement('button');
+    yesButton.textContent = 'Yes';
+    yesButton.onclick = handleYesButtonClick;
+
+    const noButton = document.createElement('button');
+    noButton.textContent = 'No';
+    noButton.onclick = handleNoButtonClick;
+
+    typedTextElement.appendChild(document.createElement('br'));
+    typedTextElement.appendChild(yesButton);
+    typedTextElement.appendChild(noButton);
+}
+
+function handleYesButtonClick() {
+   window.location.href = 'game.html';
+}
+
+function handleNoButtonClick() {
+    window.location.href = 'https://www.google.com';
+}
 
 function scrollToBottom() {
     window.scrollTo(0, document.body.scrollHeight);

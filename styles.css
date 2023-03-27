@@ -1,14 +1,30 @@
 body {
     background-color: #000;
     font-family: "Courier New", monospace;
+    background-color: black;
+    color: #ffb000;
     margin: 0;
     padding: 0;
+}
+
+#intro {
+    height: 100%;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    text-align: center;
 }
 
 #terminal {
     padding: 1rem;
     max-width: 80%;
     margin: 1rem auto;
+}
+
+#typed-text {
+    font-size: 20pt;
 }
 
 .input-line {
@@ -23,12 +39,28 @@ body {
     background-color: transparent;
     border: none;
     outline: none;
-    color: #ffcc00;
+    color: #ffb000;
     width: 100%;
     caret-color: #ffcc00;
 }
 
 #output {
-    color: #ffcc00;
+    color: #ffb000;
     white-space: pre-wrap;
+}
+
+button {
+    background-color: black;
+    border: none;
+    color: #ffb000;
+    font-family: 'Courier New', monospace;
+    font-size: 20pt;
+    margin: 0 10px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #FDD835;
+    color: black;
 }
