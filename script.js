@@ -115,5 +115,6 @@ function handleNoButtonClick() {
 }
 
 function scrollToBottom() {
-    window.scrollTo(0, document.body.scrollHeight);
+    const terminal = document.getElementById('terminal');
+    terminal.scrollTo(0, terminal.scrollHeight);
 }
