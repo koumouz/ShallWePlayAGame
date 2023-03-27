@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function initGame() {
+    // Get the inital game setting
     let response = await makeRequest('/api/initGame');
     turnHistory.push({"role": "assistant", "content": response.text});
 
@@ -23,11 +24,18 @@ async function initGame() {
     `;
     scrollToBottom();
 
+    // Make the input-line visible
+    const inputLineElement = document.getElementById('input-line');
+    inputLineElement.classList.remove('hidden');
+    inputLineElement.style.display = 'flex';
+    inputElement.focus();
+
+    // Get ready for player input
     inputElement.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
             processCommand(inputElement.value);
-            inputElement.value = 'Loading, Please Wait...';
+            inputElement.value = 'Thinking, please wait...';
         }
     });
 }
@@ -95,6 +103,7 @@ async function processCommand(command) {
 
     // Update the text
     inputElement.value = '';
+    inputElement.focus();
     outputElement.innerHTML += `
         <div class="input-line">
             <div class="prompt">>></div>
@@ -139,4 +148,5 @@ function handleNoButtonClick() {
 function scrollToBottom() {
     const terminal = document.getElementById('terminal');
     terminal.scrollTo(0, terminal.scrollHeight);
+    console.log("scrolling");
 }

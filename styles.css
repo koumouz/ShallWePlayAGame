@@ -45,21 +45,22 @@ body, html {
     font-size: 20pt;
 }
 
-.input-line {
-    display: flex;
+.hidden {
+    display: none;
 }
 
 .prompt {
     color: #ffb000;
 }
 
-.input {
-    background-color: transparent;
+#input {
+    width: 765px;
     border: none;
+    background: none;
+    color: #FFA500;
+    font-family: 'Courier New', Courier, monospace;
     outline: none;
-    color: #ffb000;
-    width: 100%;
-    caret-color: #ffcc00;
+    font-size: 12pt;
 }
 
 #output {

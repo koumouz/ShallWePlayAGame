@@ -11,8 +11,7 @@ const port = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, '.')));
-
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Authentication middleware
 const authMiddleware = (req, res, next) => {
@@ -30,7 +29,6 @@ const authMiddleware = (req, res, next) => {
 
 // Apply authentication middleware to all routes
 //app.use(authMiddleware);
-
 
 /* Begin Routes */
 app.post('/api/initGame', async (req, res) => {
@@ -80,7 +78,7 @@ gamePrompt += "Only answer prompts that are related to the story. If you receive
 gamePrompt += "Finally, generate a prompt for the DALL-E API that you can use to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt";
 
 let imagePrompt = "A mysterious island at twilight surrounded by fog with a small boat pulling up to it."
-let imageStyle = "Only in black and white, landscape, 8bit, pixel art"
+let imageStyle = "black and white, greyscale, spooky, mysterious, high quality, hand drawn"
 
 async function initGame() {
     let initHistory = [];
@@ -123,10 +121,6 @@ async function generateNextTurn(history) {
     // Split the text response so we can get the image prompt from it
     const substrs = textData.choices[0].message.content.split('IMAGE_PROMPT');
     imagePrompt = substrs[1];
-
-    // DEBUG
-    console.log('str0:' + substrs[0])
-    console.log('str1:' + substrs[1])
 
     // Now generate the image
     const imageRequestBody = JSON.stringify({
