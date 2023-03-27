@@ -22,9 +22,9 @@ gamePrompt += "Only I can take actions for the player, you can never act as the 
 let createImagePrompt = "Additionally, create a prompt for stable diffusion to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt";
 
 let imagePrompt = "A mysterious island at twilight surrounded by fog."
-let imageStyle = ", black and white only, in the style of an adventure game from the 1980s, pixel art, high quality"
+let imageStyle = ", black and white only, in the style of an adventure game from the 1980s as pixel art"
 
-let createImages = false;
+let createImages = true;
 let numMaxTokens = 350;
 /* End Prompts and Knobs */
 
@@ -104,7 +104,7 @@ async function generateNextTurn(history) {
     };
 
     // Update the most recent prompt to append the "createImagePrompt" prompt, so we can have nice fancy images
-    history[history.length - 1].content += createImagePrompt;
+    history[history.length - 1].content = history[history.length - 1].content.split('.')[0] + createImagePrompt;
 
     // Generate the text
     const textRequestBody = JSON.stringify({

@@ -12,6 +12,7 @@ body, html {
 
 #image-container {
     width: 800px;
+    height: 300;
     text-align: center;
 }
 

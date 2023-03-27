@@ -86,22 +86,13 @@ async function processCommand(command) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
-        canvas.width = 800;
-        canvas.height = 800;
+        canvas.width = 256;
+        canvas.height = 256;
 
         const tempImage = new Image();
         tempImage.src = URL.createObjectURL(blob);
         tempImage.onload = function () {
-            // Calculate the scale factor and new height to maintain the aspect ratio
-            const scaleFactor = 800 / tempImage.width;
-            const newHeight = tempImage.height * scaleFactor;
-
-            // Calculate the vertical offset to crop the image at the vertical center
-            //const yOffset = (newHeight - 50) / 2;
-            const yOffset = 0;
-
-            // Draw the image scaled and cropped
-            ctx.drawImage(tempImage, 0, -yOffset, 800, newHeight);
+            ctx.drawImage(tempImage, 0, 0, 256, 256);
             imageElement.src = canvas.toDataURL();
         };
     }
