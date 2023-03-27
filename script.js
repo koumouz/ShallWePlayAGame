@@ -1,6 +1,8 @@
 const inputElement = document.getElementById('input');
 const outputElement = document.getElementById('output');
+const typedTextElement = document.getElementById('typed-text');
 const turnHistory = [];
+const text = 'Would you like to play a game?';
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (document.getElementById('typed-text')) {
@@ -28,21 +30,58 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initGame() {
     let result = await makeRequest('/api/initGame');
     turnHistory.push({"role": "assistant", "content": result});
+    generateImage('A mysterious island at twilight surrounded by fog with a small boat pulling up to it. Black and white');
 
     return result;
 }
 
-async function getNextTurn(prompt) {
+async function generateNextTurn(prompt) {
     turnHistory.push({"role": "user", "content": prompt});
 
     let body = JSON.stringify({
         turnHistory: turnHistory,
     });
 
-    let result = await makeRequest('/api/getNextTurn', body);
+    let result = await makeRequest('/api/generateNextTurn', body);
     turnHistory.push({"role": "assistant", "content": result});
 
     return result;
+}
+
+async function generateImage(prompt) {
+    const body = JSON.stringify({ prompt: prompt });
+
+    try {
+        const response = await fetch('/api/generateImage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: body,
+        });
+
+        const imageData = await response.blob();
+        const imageURL = URL.createObjectURL(data);
+        const imageElement = document.getElementById('fixed-image');
+        imageElement.src = imageURL;
+    } catch (error) {
+        console.error('Error generating image:', error);
+    }
+
+/*
+    const imageData = await makeRequest('/api/generateImage');
+    const imageElement = document.getElementById('fixed-image');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = 800;
+    canvas.height = 250;
+
+    const tempImage = new Image();
+    tempImage.src = imageData.image;
+    tempImage.onload = function () {
+        ctx.drawImage(tempImage, 0, 0, 800, 250);
+        imageElement.src = canvas.toDataURL();
+    };
+*/
 }
 
 async function makeRequest(url, body) {
@@ -66,7 +105,7 @@ async function makeRequest(url, body) {
 }
 
 async function processCommand(command) {
-    let result = await getNextTurn(command);
+    let result = await generateNextTurn(command);
 
     inputElement.value = '';
     outputElement.innerHTML += `
@@ -78,10 +117,6 @@ async function processCommand(command) {
     `;
     scrollToBottom();
 }
-
-const typedTextElement = document.getElementById('typed-text');
-
-const text = 'Would you like to play a game?';
 
 function typeText(index) {
     if (index < text.length) {
