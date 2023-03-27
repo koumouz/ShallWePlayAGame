@@ -19,9 +19,11 @@ async function initGame() {
     let response = await makeRequest('/api/initGame');
     turnHistory.push({"role": "assistant", "content": response.text});
 
-    outputElement.innerHTML = `
-        <div>${response.text}</div>
-    `;
+    outputElement.textContent = "";
+    const responseElement = document.createElement('div');
+    responseElement.textContent = response.text.trim();
+    responseElement.style.marginBottom = '1em'; // Add margin to the bottom
+    outputElement.appendChild(responseElement);
     scrollToBottom();
 
     // Make the input-line visible
@@ -107,13 +109,29 @@ async function processCommand(command) {
     // Update the text
     inputElement.value = '';
     inputElement.focus();
-    outputElement.innerHTML += `
-        <div class="input-line">
-            <div class="prompt">>></div>
-            <div>${command.trim()}</div>
-        </div>
-        <div>${response.text.trim()}</div>
-    `;
+
+    // Create and append the input line element
+    const inputLineElement = document.createElement('div');
+    inputLineElement.className = 'input-line';
+    
+    const promptElement = document.createElement('div');
+    promptElement.className = 'prompt';
+    promptElement.textContent = '>>';
+    inputLineElement.appendChild(promptElement);
+
+    const inputCommandElement = document.createElement('div');
+    inputCommandElement.textContent = command.trim();
+    inputLineElement.appendChild(inputCommandElement);
+    
+    outputElement.appendChild(inputLineElement);
+
+    // Create and append the response element
+    const responseElement = document.createElement('div');
+    responseElement.textContent = response.text.trim();
+    responseElement.style.marginBottom = '1em'; // Add margin to the bottom
+    outputElement.appendChild(responseElement);
+
+
     scrollToBottom();
 }
 

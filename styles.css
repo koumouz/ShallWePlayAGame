@@ -63,6 +63,11 @@ body, html {
     font-size: 12pt;
 }
 
+.input-line {
+    display: flex;
+    align-items: center;
+}
+
 #output {
     color: #ffb000;
     white-space: pre-wrap;

@@ -19,14 +19,14 @@ let gamePrompt = "You are an interface for a text-based video game in the style 
 gamePrompt += "The story begins as we all step foot off the rowboat we used to reach the island. It’s twilight and we are excited to begin our adventure. Begin the first turn with a short introduction of all the characters, including me and explain the setting.";
 gamePrompt += "Only I can take actions for the player, you can never act as the player character. The player can continue taking turns up to a maximum of 10 turns. After that you should respond with a message that the game is now over and then create a satisfying ending to the story for the player."
 
-let addImagePrompt = "Additionally, create a prompt for stable diffusion to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt";
+let createImagePrompt = "Additionally, create a prompt for stable diffusion to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt";
 
 let imagePrompt = "A mysterious island at twilight surrounded by fog."
 let imageStyle = ", black and white only, in the style of an adventure game from the 1980s, pixel art, high quality"
 
 let createImages = false;
-let numMaxTokens = 300;
-/* End Prompts */
+let numMaxTokens = 350;
+/* End Prompts and Knobs */
 
 
 // Authentication middleware
@@ -103,8 +103,8 @@ async function generateNextTurn(history) {
         'Authorization': `Bearer ${apiKey}`,
     };
 
-    // Update the most recent prompt to append the "addImagePrompt" prompt, so we can have nice fancy images
-    history[history.length - 1].content += addImagePrompt;
+    // Update the most recent prompt to append the "createImagePrompt" prompt, so we can have nice fancy images
+    history[history.length - 1].content += createImagePrompt;
 
     // Generate the text
     const textRequestBody = JSON.stringify({
