@@ -3,7 +3,6 @@ import fetch from 'node-fetch';
 import path from 'path';
 import FormData from 'form-data';
 import { fileURLToPath } from 'url';
-import basicAuth from 'basic-auth';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -13,8 +12,14 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, '.')));
 app.use(express.json({ limit: '50mb' }));
 
+/* OpenAI API */
+const apiKey = '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';
+const textAPIURL = 'https://api.openai.com/v1/chat/completions';
+const imageAPIURL = 'https://api.openai.com/v1/images/generations';
+/* End OpenAI API */
 
-/* Core Promts and Knobs*/
+
+/* Core Prompts and Knobs*/
 
 // Game Rules
 let gamePrompt = "You are an interface for a text-based interactive fiction video game in the style of Zork, Planetfall and Wishbringer. You are responsible for creating the narrative direction of the game. Each turn you will give the player a description of the current location they are in, which direction they can move to next and the effect of their actions on the world. On the player’s turn, they will give you a prompt for what they want to do next, where they want to go and what actions they want to take. You will always allow the player to make decisions around the player character and will never act on their behalf. All decisions from the player are based on their prompts; you should never assume the player does anything. The player is always referred to in the 2nd person (“You are here. You walked down the street, etc.). The game will last 50 turns and you will try to see the narrative reach a conclusion within the 50 turn limit. The player can make decisions that would cause their character to die, like walking off a cliff or fighting a monster. If they do so, it is game over and experience ends. You will strive to keep your descriptions as concise and short as possible. Include relevant detail that the player should know about the scene, but do not be overly verbose. Try to keep the total number of words and sentences you use as short as possible. After teach turn, ask the player “What would you like to do next?”Player actions are limited to basic movement, talking to characters or interacting with the environment. The player cannot break character and ask you about unrelated topics that are unrelated to the game. If the player asks any questions that are not related to the game descriptions you have given them, prompt the player to focus on the game at hand and refuse to answer other questions. It should be possible for the player to die and then the game is over. Create obstacles and dangers for the player to face and if they fail to meet the challenge (like fighting a monster that is more power than them) or if they do something reckless (like walking off a cliff) then the player’s game is over. Once a game over happens, you should refuse to answer any more prompts from the player and instead ask them if they want to start a new game. It’s important that the player feels there is some risk involved - it should be difficult for them to progress through the game and rewarding when they complete puzzles and challenges that you place in their path.Any characters that you create within the game scenario that are not the player character, you are free to control and determine how they should act. However, the player character is always the main character of the story.";
@@ -33,25 +38,8 @@ const imageStyle = ", black and white only, in the style of an adventure game fr
 
 const createImages = true;
 const numMaxTokens = 300;
+const temperature = 0.8
 /* End Prompts and Knobs */
-
-
-// Authentication middleware
-const authMiddleware = (req, res, next) => {
-    const user = basicAuth(req);
-    const username = 'bueller';
-    const password = 'I like playing games';
-
-    if (user && user.name === username && user.pass === password) {
-        next();
-    } else {
-        res.set('WWW-Authenticate', 'Basic realm="Authorization Required"');
-        res.status(401).send('Authorization Required');
-    }
-};
-
-// Apply authentication middleware to all routes
-//app.use(authMiddleware);
 
 /* Begin Routes */
 app.post('/api/initGame', async (req, res) => {
@@ -102,9 +90,6 @@ async function initGame() {
 }
 
 async function generateNextTurn(history) {
-    const apiKey = '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';
-    const textURL = 'https://api.openai.com/v1/chat/completions';
-    const imageURL = 'https://api.openai.com/v1/images/generations';
     const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
@@ -120,10 +105,10 @@ async function generateNextTurn(history) {
         max_tokens: numMaxTokens,
         n: 1,
         stop: null,
-        temperature: 0.3,
+        temperature: temperature,
     });
 
-    const textResponse = await fetch(textURL, {
+    const textResponse = await fetch(textAPIURL, {
         method: 'POST',
         headers: headers,
         body: textRequestBody,
@@ -136,19 +121,25 @@ async function generateNextTurn(history) {
         throw new Error('Invalid response from OpenAI API');
     }
 
-    // Split the text response so we can get the image prompt from it
+    // Split the text response so we can get the image prompt out
     const substrs = textData.choices[0].message.content.split('IMAGE_PROMPT');
-    imagePrompt = substrs[1];
-
     let payload = {};
     payload.text = substrs[0].trim();
+    payload.imagePrompt = substrs[1].trim();
 
-    if(createImages == true && imagePrompt != null) {
+    // DEBUG: Show the prompts and responses
+    //console.log("\nText Response: " + payload.text);
+
+    return payload;
+}
+
+async function generateImage(prompt) {
+    if(createImages == true && prompt != null) {
         // Now generate the image
-        imagePrompt = imagePrompt + imageStyle;
+        prompt = prompt + imageStyle;
         const imageRequestBody = JSON.stringify({
             model: 'image-alpha-001',
-            prompt: imagePrompt,
+            prompt: prompt,
             num_images: 1,
             size: '256x256',
             response_format: 'url',
@@ -173,11 +164,8 @@ async function generateNextTurn(history) {
         payload.image = Buffer.from(imageBuffer);
         payload.imageAltText = imagePrompt;
     }
-    
-    // DEBUG: Show the prompts and responses
-    //console.log("\nResponse: " + textData.choices[0].message.content);
-    //console.log("\nText Response: " + payload.text);
-    //console.log("\nImage Prompt: " + imagePrompt + imageStyle);
+
+    //console.log("\nImage Prompt: " + prompt + imageStyle);
 
     return payload;
 }

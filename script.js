@@ -15,10 +15,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function initGame() {
-    // Get the inital game setting
-    let response = await makeRequest('/api/initGame');
-    turnHistory.push({"role": "assistant", "content": response.text});
-
     // Start the game and get the initial scenario.
     await processCommand("Start a New Game");
 
@@ -53,8 +49,7 @@ async function generateNextTurn(prompt) {
     return result;
 }
 
-async function processCommand(command) {
-    let response = await generateNextTurn(command);
+async function generateImage(prompt) {
 
     if(response.image !== undefined) {
         // Update the image
@@ -73,8 +68,13 @@ async function processCommand(command) {
             ctx.drawImage(tempImage, 0, 0, 256, 256);
             imageElement.src = canvas.toDataURL();
             imageElement.alt = response.image.imageAltText;
+            console.log(response.image.imageAltText);
         };
     }
+}
+
+async function processCommand(command) {
+    let response = await generateNextTurn(command);
 
     // Update the text
     inputElement.value = '';
