@@ -81,7 +81,7 @@ async function generateImage(prompt) {
             ctx.drawImage(tempImage, 0, 0, 256, 256);
 
             // Set the globalCompositeOperation and fill with the tint color
-            ctx.globalCompositeOperation = 'overlay';
+            ctx.globalCompositeOperation = 'multiply';
             ctx.fillStyle = 'rgba(255, 165, 0, 0.8)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
