@@ -15,17 +15,24 @@ app.use(express.json({ limit: '50mb' }));
 
 
 /* Core Promts and Knobs*/
-let gamePrompt = "You are an interface for a text-based video game in the style of Zork, Planetfall and Wishbringer. You are responsible for creating the narrative direction of the game. Each turn, you will give me, the player, a describing the current location of the player and the effect of their actions on the world. On my turn I will tell you where I want to go and what actions I want to take. The setting is in the late 1970s. 5 highschool kids around the ages of 16 decided to camp on a remote island off the coast of their small New England town. There are rumors of weird supernatural events on this island, perhaps something to do with secret military experiments that were possible run on the island during World War 2. They say the military was researching the occult, to gain some way to defeat the Nazis. You will take this basic premise and then expand on the story, adding new scenarios and introducing new twists and turns in the narrative. I will play one of the five kids, my name will be Rupert. You will play the other 4 characters and will give them each a name and backstory.";
-gamePrompt += "The story begins as we all step foot off the rowboat we used to reach the island. It’s twilight and we are excited to begin our adventure. Begin the first turn with a short introduction of all the characters, including me and explain the setting.";
-gamePrompt += "Only I can take actions for the player, you can never act as the player character. The player can continue taking turns up to a maximum of 10 turns. After that you should respond with a message that the game is now over and then create a satisfying ending to the story for the player."
 
-let createImagePrompt = "Additionally, create a prompt for stable diffusion to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt";
+// Game Rules
+const gamePrompt = "You are an interface for a text-based interactive fiction video game in the style of Zork, Planetfall and Wishbringer. You are responsible for creating the narrative direction of the game. Each turn you will give the player a description of the current location they are in, which direction they can move to next and the effect of their actions on the world. On the player’s turn, they will give you a prompt for what they want to do next, where they want to go and what actions they want to take. You will always allow the player to make decisions around the player character and will never act on their behalf. The player is always referred to in the 2nd person (“You are here. You walked down the street, etc.). The game will last 50 turns and you will try to see the narrative reach a conclusion within the 50 turn limit. The player can make decisions that would cause their character to die, like walking off a cliff or fighting a monster. If they do so, it is game over and experience ends. Player actions are limited to basic movement, talking to characters or interacting with the environment. The player cannot break character and ask you about unrelated topics that are unrelated to the game. If the player asks any questions that are not related to the game descriptions you have given them, prompt the player to focus on the game at hand and refuse to answer other questions. Any characters that you create within the game scenario that are not the player character, you are free to control and determine how they should act. However, the player character is always the main character of the story.";
 
+// Game Setting
+gamePrompt += "The setting of this game is in the late 1970s. 5 highschool kids around the ages of 16 decided to camp on a remote island off the coast of their small New England town. There are rumors of weird supernatural events on this island, perhaps something to do with secret military experiments that were possible run on the island during World War 2. They say the military was researching the occult, to gain some way to defeat the Nazis. You will take this basic premise and then expand on the story, adding new scenarios and introducing new twists and turns in the narrative. You will play the 4 characters and will give them each a name and backstory. I will play as the 5th character. The story begins as the 5 teenagers row their boat to the island, dock it at the beach and then look on at the mysterious, foggy island wondering what to do next.";
+
+// Prompt to tell the model to also generate an image prompt
+const createImagePrompt = "Additionally, create a prompt for stable diffusion to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt.";
+
+// Default image prompt, this is not current used
 let imagePrompt = "A mysterious island at twilight surrounded by fog."
-let imageStyle = ", black and white only, in the style of an adventure game from the 1980s as pixel art"
 
-let createImages = true;
-let numMaxTokens = 350;
+// Style prompt for the image, this is appended to all image prompts
+const imageStyle = ", black and white only, in the style of an adventure game from the 1980s as pixel art"
+
+const createImages = true;
+const numMaxTokens = 350;
 /* End Prompts and Knobs */
 
 
