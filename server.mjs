@@ -1,26 +1,47 @@
 import express from 'express';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
-import path from 'path';
 import fs from 'fs/promises';
 import FormData from 'form-data';
-import { fileURLToPath } from 'url';
-
-const app = express();
-const port = process.env.PORT || 3000;
+import session from 'express-session';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-app.use(express.static(path.join(__dirname, '.')));
+const __dirname = dirname(__filename);
+
+const app = express();
+const port = 3000;
+
 app.use(express.json({ limit: '50mb' }));
+
+app.use(
+  session({
+    secret: 'h47u3jnkf034jtldfg-0345jmsd0-m902378',
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: false }, // Change to `true` if using HTTPS
+  })
+);
+
+// Middleware to protect game.html
+app.use('/game.html', (req, res, next) => {
+  if (req.session.authenticated) {
+    next();
+  } else {
+    res.redirect('/');
+  }
+});
+
+app.use(express.static(__dirname + '/public')); // Serve files from the public folder
+
+/* Core Prompts and Knobs*/
 
 /* OpenAI API */
 const apiKey = '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';
 const textAPIURL = 'https://api.openai.com/v1/chat/completions';
 const imageAPIURL = 'https://api.openai.com/v1/images/generations';
 /* End OpenAI API */
-
-
-/* Core Prompts and Knobs*/
 
 // Game Rules
 let gamePrompt = await loadGamePrompt('gamePrompts/adventure1.txt');
@@ -37,6 +58,19 @@ const temperature = 1;
 /* End Prompts and Knobs */
 
 /* Begin Routes */
+app.post('/api/authenticate', (req, res) => {
+    // Hardcoded credentials
+    const username = 'user';
+    const password = '123';
+
+    if (req.body.username === username && req.body.password === password) {
+        req.session.authenticated = true;
+        res.json({ success: true });
+    } else {
+        res.json({ success: false });
+    }
+});
+
 app.post('/api/initGame', async (req, res) => {
     try {
         const response = await initGame();
@@ -183,6 +217,14 @@ async function loadGamePrompt(path) {
   } catch (err) {
     console.error('Error reading ' + path, err);
     throw new Error('Failed to load gamePrompt from file');
+  }
+}
+
+function isAuthenticated(req, res, next) {
+  if (req.session.authenticated) {
+    next();
+  } else {
+    res.redirect('/');
   }
 }
 
