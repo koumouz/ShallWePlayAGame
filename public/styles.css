@@ -1,0 +1,124 @@
+body, html {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    font-family: 'Courier New', Courier, monospace;
+    background-color: black;
+    color: #FFA500;
+}
+
+#game-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 10px;
+}
+
+#image-container {
+    width: 256px;
+    height: 256px;
+    text-align: center;
+}
+
+#terminal {
+    width: 800px;
+    padding-left: 10px;
+    padding-right: 10px;
+    overflow-y: scroll;
+    padding-bottom: 20px;
+    box-sizing: border-box;
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;  /* Firefox */
+}
+
+#terminal::-webkit-scrollbar { /* Chrome, Safari, and Edge */
+    display: none;
+}
+
+#intro {
+    height: 100%;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    text-align: center;
+}
+
+#login-form {
+    padding-top: 25px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#login-form.hidden {
+    display: none;
+}
+
+#login-form.visible {
+    display: flex;
+}
+
+.login-input {
+    background-color: black;
+    border: 1px solid #FFA500;
+    color: #FFA500;
+}
+
+.input-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.login-label {
+    margin-right: 10px;
+}
+#intro-text {
+    font-size: 20pt;
+}
+
+.prompt {
+    color: #ffb000;
+}
+
+#input {
+    width: 765px;
+    border: none;
+    background: none;
+    color: #FFA500;
+    font-family: 'Courier New', Courier, monospace;
+    outline: none;
+    font-size: 12pt;
+}
+
+.input-line {
+    display: flex;
+    align-items: center;
+}
+
+#output {
+    color: #ffb000;
+    white-space: pre-wrap;
+}
+
+.hidden {
+    display: none;
+}
+
+button {
+    background-color: black;
+    border: none;
+    color: #ffb000;
+    font-family: 'Courier New', monospace;
+    font-size: 12pt;
+    margin: 0 10px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #FDD835;
+    color: black;
+}
