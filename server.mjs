@@ -55,7 +55,7 @@ let gamePrompt = await loadGamePrompt('gamePrompts/adventure1.txt');
 const createImagePrompt = "Additionally, create a prompt for stable diffusion to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt.";
 
 // Style prompt for the image, this is appended to all image prompts
-const imageStyle = ", black and white only, in the style of an adventure game from the 1980s as pixel art"
+const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art"
 
 const createImages = true;
 const numMaxTokens = 300;
@@ -169,8 +169,10 @@ async function generateNextTurn(history) {
 
 async function generateImage(prompt) {
     if (createImages == true && prompt != null) {
-        // Now generate the image
-        prompt = prompt + imageStyle;
+        
+        // Clean up the prompt in a lazy way (I will fix this eventually)
+        prompt = prompt.slice(0, -1) + imageStyle;
+        prompt = prompt.substring(2);
 
         // DEBUG
         //console.log("\nGenerate Image: " + prompt);

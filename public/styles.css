@@ -2,7 +2,8 @@ body, html {
     height: 100%;
     width: 100%;
     margin: 0;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: 'Inconsolata', Courier, monospace;
+    font-size: 12pt;
     background-color: black;
     color: #FFA500;
 }
@@ -88,7 +89,7 @@ body, html {
     border: none;
     background: none;
     color: #FFA500;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: 'Inconsolata', Courier, monospace;
     outline: none;
     font-size: 12pt;
 }
@@ -105,20 +106,4 @@ body, html {
 
 .hidden {
     display: none;
-}
-
-button {
-    background-color: black;
-    border: none;
-    color: #ffb000;
-    font-family: 'Courier New', monospace;
-    font-size: 12pt;
-    margin: 0 10px;
-    padding: 5px 10px;
-    cursor: pointer;
-}
-
-button:hover {
-    background-color: #FDD835;
-    color: black;
 }

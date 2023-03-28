@@ -79,7 +79,14 @@ async function generateImage(prompt) {
         tempImage.src = URL.createObjectURL(blob);
         tempImage.onload = function () {
             ctx.drawImage(tempImage, 0, 0, 256, 256);
+
+            // Set the globalCompositeOperation and fill with the tint color
+            ctx.globalCompositeOperation = 'overlay';
+            ctx.fillStyle = 'rgba(255, 165, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
             imageElement.src = canvas.toDataURL();
+
             // Set the alt text if available
             if (response.headers.get('X-Image-Alt-Text')) {
                 imageElement.alt = response.headers.get('X-Image-Alt-Text');
@@ -105,7 +112,7 @@ async function processCommand(command) {
     // Add command and response elements
     const commandElement = document.createElement('div');
     commandElement.className = 'input-line';
-    commandElement.innerHTML = `<div class="prompt">>></div><div>${command.trim()}</div>`;
+    commandElement.innerHTML = `<div class="prompt">> </div><div>${command.trim()}</div>`;
     outputElement.appendChild(commandElement);
 
     const responseElement = document.createElement('div');
