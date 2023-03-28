@@ -2,12 +2,12 @@ const inputElement = document.getElementById('input');
 const outputElement = document.getElementById('output');
 const typedTextElement = document.getElementById('typed-text');
 const turnHistory = [];
-const text = 'Would you like to play a game?';
+const introText = 'Would you like to play a game?';
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (document.getElementById('typed-text')) {
         // Display out quick intro
-        typeText(0);
+        typeText(document.getElementById('typed-text'), introText, 0, 100, showOptions);
     } else {
         // Start the game
         initGame();
@@ -101,38 +101,19 @@ async function processCommand(command) {
     inputElement.value = '';
     inputElement.focus();
 
-    // Create and append the input line element
-    const inputLineElement = document.createElement('div');
-    inputLineElement.className = 'input-line';
-    
-    const promptElement = document.createElement('div');
-    promptElement.className = 'prompt';
-    promptElement.textContent = '>>';
-    inputLineElement.appendChild(promptElement);
+    // Add command and response elements
+    const commandElement = document.createElement('div');
+    commandElement.className = 'input-line';
+    commandElement.innerHTML = `<div class="prompt">>></div><div>${command.trim()}</div>`;
+    outputElement.appendChild(commandElement);
 
-    const inputCommandElement = document.createElement('div');
-    inputCommandElement.textContent = command.trim();
-    inputLineElement.appendChild(inputCommandElement);
-    
-    outputElement.appendChild(inputLineElement);
-
-    // Create and append the response element
     const responseElement = document.createElement('div');
-    responseElement.textContent = response.text.trim();
-    responseElement.style.marginBottom = '1em'; // Add margin to the bottom
     outputElement.appendChild(responseElement);
 
+    // Type the response text with animation
+    typeText(responseElement, response.text.trim());
 
     scrollToBottom();
-}
-
-function typeText(index) {
-    if (index < text.length) {
-        typedTextElement.textContent += text[index];
-        setTimeout(() => typeText(index + 1), 100);
-    } else {
-        showOptions();
-    }
 }
 
 function showOptions() {
@@ -160,4 +141,14 @@ function handleNoButtonClick() {
 function scrollToBottom() {
     const terminal = document.getElementById('terminal');
     terminal.scrollTo(0, terminal.scrollHeight);
+}
+
+function typeText(element, text, index = 0, interval = 10, callback) {
+    if (index < text.length) {
+        element.innerHTML += text[index];
+        setTimeout(() => typeText(element, text, index + 1, interval, callback), interval);
+    }
+    else {
+        callback();
+    }
 }
