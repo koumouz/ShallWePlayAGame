@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const port = 80;
+const port = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '50mb' }));
 
