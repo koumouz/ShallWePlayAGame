@@ -6,6 +6,11 @@ import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import FormData from 'form-data';
 import session from 'express-session';
+import dotenv from 'dotenv';
+
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: './config.env' });
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,7 +22,7 @@ app.use(express.json({ limit: '50mb' }));
 
 app.use(
   session({
-    secret: 'h47u3jnkf034jtldfg-0345jmsd0-m902378',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
     cookie: { secure: false }, // Change to `true` if using HTTPS
@@ -38,7 +43,7 @@ app.use(express.static(__dirname + '/public')); // Serve files from the public f
 /* Core Prompts and Knobs*/
 
 /* OpenAI API */
-const apiKey = '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';
+const apiKey = process.env.API_KEY;
 const textAPIURL = 'https://api.openai.com/v1/chat/completions';
 const imageAPIURL = 'https://api.openai.com/v1/images/generations';
 /* End OpenAI API */
@@ -60,8 +65,8 @@ const temperature = 1;
 /* Begin Routes */
 app.post('/api/authenticate', (req, res) => {
     // Hardcoded credentials
-    const username = 'ferris';
-    const password = 'win the game';
+    const username = process.env.USERNAME;
+    const password = process.env.PASSWORD;
 
     if (req.body.username === username && req.body.password === password) {
         req.session.authenticated = true;
