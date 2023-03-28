@@ -68,9 +68,6 @@ app.post('/api/authenticate', (req, res) => {
     const username = process.env.USERNAME;
     const password = process.env.PASSWORD;
 
-    console.log("CONFIG: " + process.env.USERNAME + " SUPPLIED: " + req.body.username);
-    console.log(process.env.SESSION_SECRET + ', ' + process.env.USERNAME + ', ' + process.env.API_KEY);
-
     if (req.body.username === username && req.body.password === password) {
         req.session.authenticated = true;
         res.json({ success: true });
