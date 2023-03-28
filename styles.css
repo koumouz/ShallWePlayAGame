@@ -5,20 +5,23 @@ body, html {
     font-family: 'Courier New', Courier, monospace;
     background-color: black;
     color: #FFA500;
+}
+
+#game-container {
     display: flex;
-    flex-direction: column;
-    align-items: center;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 10px;
 }
 
 #image-container {
-    width: 800px;
-    height: 300;
+    width: 512px;
+    height: 512px;
     text-align: center;
 }
 
 #terminal {
     width: 800px;
-    padding-top: 10px;
     padding-left: 10px;
     padding-right: 10px;
     overflow-y: scroll;

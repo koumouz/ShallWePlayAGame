@@ -82,7 +82,7 @@ async function processCommand(command) {
         // Update the image
         const imageBuffer = new Uint8Array(response.image.data);
         const blob = new Blob([imageBuffer], { type: 'image/png' });
-        const imageElement = document.getElementById('fixed-image');
+        const imageElement = document.getElementById('game-image');
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
