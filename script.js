@@ -19,12 +19,8 @@ async function initGame() {
     let response = await makeRequest('/api/initGame');
     turnHistory.push({"role": "assistant", "content": response.text});
 
-    outputElement.textContent = "";
-    const responseElement = document.createElement('div');
-    responseElement.textContent = response.text.trim();
-    responseElement.style.marginBottom = '1em'; // Add margin to the bottom
-    outputElement.appendChild(responseElement);
-    scrollToBottom();
+    // Start the game and get the initial scenario.
+    await processCommand("Start a New Game");
 
     // Make the input-line visible
     const inputLineElement = document.getElementById('input-line');
@@ -43,36 +39,18 @@ async function initGame() {
 }
 
 async function generateNextTurn(prompt) {
-    turnHistory.push({"role": "user", "content": prompt});
+    let result = null;
 
-    let body = JSON.stringify({
-        turnHistory: turnHistory,
-    });
-
-    let result = await makeRequest('/api/generateNextTurn', body);
-    turnHistory.push({"role": "assistant", "content": result.text});
-
-    return result;
-}
-
-async function makeRequest(url, body) {
-    const headers = {
-        'Content-Type': 'application/json',
-    };
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: headers,
-            body: body,
-        });
-
-        const data = await response.json();
-        return data.response;
-    } catch (error) {
-        console.error('Error communicating with the server:', error);
-        return 'An error occurred while processing your request.';
+    if(prompt == "Start a New Game") {
+        result = await makeRequest('/api/initGame');
+    } else {
+        turnHistory.push({"role": "user", "content": prompt});
+        let body = JSON.stringify({ turnHistory: turnHistory });
+        result = await makeRequest('/api/generateNextTurn', body);
     }
+
+    turnHistory.push({"role": "assistant", "content": result.text});
+    return result;
 }
 
 async function processCommand(command) {
@@ -94,6 +72,7 @@ async function processCommand(command) {
         tempImage.onload = function () {
             ctx.drawImage(tempImage, 0, 0, 256, 256);
             imageElement.src = canvas.toDataURL();
+            imageElement.alt = response.image.imageAltText;
         };
     }
 
@@ -109,11 +88,32 @@ async function processCommand(command) {
 
     const responseElement = document.createElement('div');
     outputElement.appendChild(responseElement);
+    outputElement.appendChild(document.createElement('br'));
 
     // Type the response text with animation
     typeText(responseElement, response.text.trim());
 
     scrollToBottom();
+}
+
+async function makeRequest(url, body) {
+    const headers = {
+        'Content-Type': 'application/json',
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: body,
+        });
+
+        const data = await response.json();
+        return data.response;
+    } catch (error) {
+        console.error('Error communicating with the server:', error);
+        return 'An error occurred while processing your request.';
+    }
 }
 
 function showOptions() {
@@ -148,7 +148,7 @@ function typeText(element, text, index = 0, interval = 10, callback) {
         element.innerHTML += text[index];
         setTimeout(() => typeText(element, text, index + 1, interval, callback), interval);
     }
-    else {
+    else if(callback) {
         callback();
     }
 }

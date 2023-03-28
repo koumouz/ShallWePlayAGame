@@ -32,7 +32,7 @@ let imagePrompt = "A mysterious island at twilight surrounded by fog."
 const imageStyle = ", black and white only, in the style of an adventure game from the 1980s as pixel art"
 
 const createImages = true;
-const numMaxTokens = 350;
+const numMaxTokens = 300;
 /* End Prompts and Knobs */
 
 
@@ -171,12 +171,13 @@ async function generateNextTurn(history) {
         const imageBuffer = await imageBufferResponse.arrayBuffer();
 
         payload.image = Buffer.from(imageBuffer);
+        payload.imageAltText = imagePrompt;
     }
     
     // DEBUG: Show the prompts and responses
     //console.log("\nResponse: " + textData.choices[0].message.content);
     //console.log("\nText Response: " + payload.text);
-    console.log("\nImage Prompt: " + imagePrompt + imageStyle);
+    //console.log("\nImage Prompt: " + imagePrompt + imageStyle);
 
     return payload;
 }
