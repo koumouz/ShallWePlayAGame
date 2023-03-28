@@ -35,26 +35,37 @@ async function initGame() {
 }
 
 async function generateNextTurn(prompt) {
-    let result = null;
+    let response = null;
 
     if(prompt == "Start a New Game") {
-        result = await makeRequest('/api/initGame');
+        response = await makeRequest('/api/initGame');
     } else {
         turnHistory.push({"role": "user", "content": prompt});
         let body = JSON.stringify({ turnHistory: turnHistory });
-        result = await makeRequest('/api/generateNextTurn', body);
+        response = await makeRequest('/api/generateNextTurn', body);
     }
 
-    turnHistory.push({"role": "assistant", "content": result.text});
-    return result;
+    turnHistory.push({"role": "assistant", "content": response.text});
+    return response;
 }
 
 async function generateImage(prompt) {
+    let body = JSON.stringify({ prompt: prompt });
+    
+    // Make the request but don't parse the response as JSON
+    let response = await fetch('/api/generateImage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body,
+    });
 
-    if(response.image !== undefined) {
+    if (response.ok) {
+        // Read the response as an ArrayBuffer
+        const imageBuffer = await response.arrayBuffer();
+
         // Update the image
-        const imageBuffer = new Uint8Array(response.image.data);
-        const blob = new Blob([imageBuffer], { type: 'image/png' });
+        const imageBufferArray = new Uint8Array(imageBuffer);
+        const blob = new Blob([imageBufferArray], { type: 'image/png' });
         const imageElement = document.getElementById('game-image');
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -67,16 +78,25 @@ async function generateImage(prompt) {
         tempImage.onload = function () {
             ctx.drawImage(tempImage, 0, 0, 256, 256);
             imageElement.src = canvas.toDataURL();
-            imageElement.alt = response.image.imageAltText;
-            console.log(response.image.imageAltText);
+            // Set the alt text if available
+            if (response.headers.get('X-Image-Alt-Text')) {
+                imageElement.alt = response.headers.get('X-Image-Alt-Text');
+            }
         };
+    } else {
+        console.error('Error generating image:', response.statusText);
     }
 }
 
 async function processCommand(command) {
     let response = await generateNextTurn(command);
 
-    // Update the text
+    // Create a request to generate an image based on the descriptive prompt
+    if(response.imagePrompt) {
+        generateImage(response.imagePrompt);
+    }
+
+    // Clear out the past command
     inputElement.value = '';
     inputElement.focus();
 

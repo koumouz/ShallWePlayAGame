@@ -38,7 +38,7 @@ const imageStyle = ", black and white only, in the style of an adventure game fr
 
 const createImages = true;
 const numMaxTokens = 300;
-const temperature = 0.8
+const temperature = 1;
 /* End Prompts and Knobs */
 
 /* Begin Routes */
@@ -69,12 +69,10 @@ app.post('/api/generateImage', async (req, res) => {
     const prompt = req.body.prompt;
 
     try {
-        const imageURL = await generateImage(prompt);
-        const imageResponse = await fetch(imageURL);
-        const imageBuffer = await imageResponse.buffer();
-
+        const imagePayload = await generateImage(prompt);
         res.type('image/png');
-        res.send(imageBuffer);
+        res.set('X-Image-Alt-Text', imagePayload.imageAltText);
+        res.send(imagePayload.image);
     } catch (error) {
         console.error('Error generating image:', error);
         res.status(500).send({ error: 'An error occurred while generating the image.' });
@@ -124,19 +122,28 @@ async function generateNextTurn(history) {
     // Split the text response so we can get the image prompt out
     const substrs = textData.choices[0].message.content.split('IMAGE_PROMPT');
     let payload = {};
-    payload.text = substrs[0].trim();
-    payload.imagePrompt = substrs[1].trim();
+    payload.text = substrs[0];
+    payload.imagePrompt = substrs[1];
 
     // DEBUG: Show the prompts and responses
-    //console.log("\nText Response: " + payload.text);
+    console.log("\nPrompt: " + history[history.length - 1].content);
+    console.log("\nText Response: " + payload.text);
 
     return payload;
 }
 
 async function generateImage(prompt) {
-    if(createImages == true && prompt != null) {
+    if (createImages == true && prompt != null) {
         // Now generate the image
         prompt = prompt + imageStyle;
+
+        console.log("\nGenerate Image: " + prompt);
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        };
+
         const imageRequestBody = JSON.stringify({
             model: 'image-alpha-001',
             prompt: prompt,
@@ -145,7 +152,7 @@ async function generateImage(prompt) {
             response_format: 'url',
         });
 
-        const imageResponse = await fetch(imageURL, {
+        const imageResponse = await fetch(imageAPIURL, {
             method: 'POST',
             headers: headers,
             body: imageRequestBody,
@@ -161,13 +168,14 @@ async function generateImage(prompt) {
         const imageBufferResponse = await fetch(imageData.data[0].url);
         const imageBuffer = await imageBufferResponse.arrayBuffer();
 
+        let payload = {};
         payload.image = Buffer.from(imageBuffer);
         payload.imageAltText = imagePrompt;
+
+        return payload;
+    } else {
+        return null;
     }
-
-    //console.log("\nImage Prompt: " + prompt + imageStyle);
-
-    return payload;
 }
 
 app.listen(port, () => {
