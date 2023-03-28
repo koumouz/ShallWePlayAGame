@@ -24,6 +24,9 @@ async function initGame() {
     inputLineElement.style.display = 'flex';
     inputElement.focus();
 
+    // Hide the initial loader
+    document.getElementById('loader').className = "hidden";
+
     // Get ready for player input
     inputElement.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
