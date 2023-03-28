@@ -60,8 +60,8 @@ const temperature = 1;
 /* Begin Routes */
 app.post('/api/authenticate', (req, res) => {
     // Hardcoded credentials
-    const username = 'user';
-    const password = '123';
+    const username = 'ferris';
+    const password = 'win the game';
 
     if (req.body.username === username && req.body.password === password) {
         req.session.authenticated = true;
