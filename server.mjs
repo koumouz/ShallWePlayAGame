@@ -57,9 +57,9 @@ const createImagePrompt = "Additionally, create a prompt for stable diffusion to
 // Style prompt for the image, this is appended to all image prompts
 const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art"
 
-const createImages = true;
-const numMaxTokens = 600;
-const temperature = .7;
+const createImages = true;     //default: true
+const numMaxTokens = 600;        //default: 600
+const temperature = .7;         //default: 0.7
 /* End Prompts and Knobs */
 
 /* Begin Routes */

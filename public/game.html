@@ -18,15 +18,21 @@
 </script>
 <body>
     <div id="game-container">
-        <div id="terminal">
-            <div id="loader">Loading, please wait...</div>
-            <div id="output"></div>
-            <div id="input-line" class="hidden">
-                <div class="prompt"></div>><input class="input" id="input" autofocus />
-            </div>
+        <div id="title-bar">
+            <span class="title-text">Adventure</span>
+            <span class="title-text">Turns: 0</span>
         </div>
-        <div id="image-container">
-            <img id="game-image" src="images/smol.png" alt="">
+        <div id="content">
+            <div id="terminal">
+                <div id="loader">Loading, please wait...</div>
+                <div id="output"></div>
+                <div id="input-line" class="hidden">
+                    <div class="prompt"></div>><input class="input" id="input" autofocus />
+                </div>
+            </div>
+            <div id="image-container">
+                <img id="game-image" src="images/smol.png" alt="">
+            </div>
         </div>
     </div>
     <script src="script.js"></script>
