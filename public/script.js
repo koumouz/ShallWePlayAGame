@@ -29,9 +29,11 @@ async function initGame() {
     // Get ready for player input
     inputElement.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
-            event.preventDefault();
-            processCommand(inputElement.value);
-            inputElement.value = 'Thinking, please wait...';
+            if(inputElement.value.length > 3) {
+                event.preventDefault();
+                processCommand(inputElement.value);
+                inputElement.value = 'Thinking...';
+            }
         }
     });
 }
@@ -120,9 +122,7 @@ async function processCommand(command) {
     outputElement.appendChild(document.createElement('br'));
 
     // Type the response text with animation
-    typeText(responseElement, response.text.trim());
-
-    scrollToBottom();
+    typeText(responseElement, response.text.trim(), 0, 10, scrollToBottom);
 }
 
 async function makeRequest(url, body) {
@@ -146,8 +146,7 @@ async function makeRequest(url, body) {
 }
 
 function scrollToBottom() {
-    const terminal = document.getElementById('terminal');
-    terminal.scrollTo(0, terminal.scrollHeight);
+    outputElement.scrollTo(0, outputElement.scrollHeight);
 }
 
 function typeText(element, text, index = 0, interval = 10, callback) {

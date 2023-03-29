@@ -6,13 +6,21 @@ body, html {
     font-size: 12pt;
     background-color: black;
     color: #FFA500;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 #game-container {
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    padding-top: 10px;
+    padding-top: 25px;
+    padding-bottom: 10px;
+    padding-left: 25px;
+    padding-right: 25px;
+    border: 1px solid #FFA500;
+    max-width: 850px;
 }
 
 #image-container {
@@ -85,7 +93,7 @@ body, html {
 }
 
 #input {
-    width: 765px;
+    width: 500px;
     border: none;
     background: none;
     color: #FFA500;
@@ -102,6 +110,14 @@ body, html {
 #output {
     color: #ffb000;
     white-space: pre-wrap;
+    height: 400px;
+    overflow-y: scroll; /* add scrolling */
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;  /* Firefox */
+}
+
+#output::-webkit-scrollbar { /* Chrome, Safari, and Edge */
+    display: none;
 }
 
 .hidden {
