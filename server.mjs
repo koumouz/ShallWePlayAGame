@@ -59,7 +59,7 @@ const imageStyle = ", black and white only, no color, monochrome, in the style o
 
 const createImages = true;
 const numMaxTokens = 300;
-const temperature = .8;
+const temperature = .5;
 /* End Prompts and Knobs */
 
 /* Begin Routes */
