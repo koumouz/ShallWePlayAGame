@@ -49,7 +49,7 @@ const imageAPIURL = 'https://api.openai.com/v1/images/generations';
 /* End OpenAI API */
 
 // Game Rules
-let gamePrompt = await loadGamePrompt('gamePrompts/adventure1-optimized.txt');
+let gamePrompt = await loadGamePrompt('gamePrompts/the_island.txt');
 
 // Prompt to tell the model to also generate an image prompt
 const createImagePrompt = "Additionally, create a prompt for stable diffusion to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt.";

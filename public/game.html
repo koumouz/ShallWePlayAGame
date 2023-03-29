@@ -19,15 +19,15 @@
 <body>
     <div id="game-container">
         <div id="title-bar">
-            <span class="title-text">Adventure</span>
-            <span class="title-text">Turns: 0</span>
+            <span id="game-title-text" class="title-text"></span>
+            <span id="turn-count-text" class="title-text"></span>
         </div>
         <div id="content">
             <div id="terminal">
                 <div id="loader">Loading, please wait...</div>
                 <div id="output"></div>
                 <div id="input-line" class="hidden">
-                    <div class="prompt"></div>><input class="input" id="input" autofocus />
+                    ><input class="input" id="input" autofocus />
                 </div>
             </div>
             <div id="image-container">

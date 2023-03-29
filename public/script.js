@@ -1,12 +1,17 @@
 const inputElement = document.getElementById('input');
 const outputElement = document.getElementById('output');
+const gameTitleTextElement = document.getElementById('game-title-text');
+const turnCountTextElement = document.getElementById('turn-count-text');
 const typedTextElement = document.getElementById('typed-text');
 const turnHistory = [];
 const introText = 'Would you like to play a game?';
+var turnCount = 0;
+const maxTurns = 10; // TODO: move this server side
+const gameOverString = "You have reached the end of thi game session. For now, games are limited to " + maxTurns + " turns but we'll be expanding on this in the future. Thanks for playing!"
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (document.getElementById('intro-text')) {
-        // Display out quick intro
+        // Display out quick intro 
         typeText(document.getElementById('intro-text'), introText, 0, 50, showLoginForm);
     } else {
         // Start the game
@@ -14,8 +19,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-async function initGame() {
+async function initGame() { 
     // Start the game and get the initial scenario.
+    turnCount = 0;
+    gameTitleTextElement.textContent = "The Island";    //hard coded for now, will fix when I added a game selector
     await processCommand("Start a New Game");
 
     // Make the input-line visible
@@ -100,6 +107,13 @@ async function generateImage(prompt) {
 }
 
 async function processCommand(command) {
+    // Create a (crude, will fix later) limit to cap the number of turns the player can make
+    // TODO: move this server side
+    if(turnCount >= maxTurns) {
+        gameOver();
+        return;
+    }
+       
     let response = await generateNextTurn(command);
 
     // Create a request to generate an image based on the descriptive prompt
@@ -107,6 +121,28 @@ async function processCommand(command) {
         generateImage(response.imagePrompt);
     }
 
+    // Clear out the past command
+    inputElement.value = '';
+    inputElement.focus();
+
+    //Update the output text
+    updateOutputText(command, response.text);
+
+    // Update the turn counter
+    turnCount++;
+    turnCountTextElement.textContent = "Turn: " + turnCount;
+}
+
+function gameOver() {
+    updateOutputText('', gameOverString);
+    const inputLineElement = document.getElementById('input-line');
+    inputElement.textContent = '';
+    inputElement.removeEventListener('keydown', (event) => {
+    });
+    inputElement.parentElement.remove();
+}
+
+function updateOutputText(command, outputText) {
     // Clear out the past command
     inputElement.value = '';
     inputElement.focus();
@@ -122,7 +158,7 @@ async function processCommand(command) {
     outputElement.appendChild(document.createElement('br'));
 
     // Type the response text with animation
-    typeText(responseElement, response.text.trim(), 0, 10, scrollToBottom);
+    typeText(responseElement, outputText.trim(), 0, 10, scrollToBottom);
 }
 
 async function makeRequest(url, body) {
