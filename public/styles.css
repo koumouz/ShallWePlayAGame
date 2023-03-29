@@ -2,7 +2,7 @@ body, html {
     height: 100%;
     width: 100%;
     margin: 0;
-    font-family: 'Inconsolata', Courier, monospace;
+    font-family: 'IBM Plex Mono', Arial, monospace;
     font-size: 12pt;
     background-color: black;
     color: #FFA500;
@@ -97,7 +97,7 @@ body, html {
     border: none;
     background: none;
     color: #FFA500;
-    font-family: 'Inconsolata', Courier, monospace;
+    font-family: 'IBM Plex Mono', Arial, monospace;
     outline: none;
     font-size: 12pt;
 }
@@ -128,7 +128,7 @@ button {
     background-color: black;
     border: none;
     color: #ffb000;
-    font-family: 'Inconsolata', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 12pt;
     margin: 0 10px;
     padding: 5px 10px;
