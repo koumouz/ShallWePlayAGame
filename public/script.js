@@ -157,6 +157,9 @@ function typeText(element, text, index = 0, interval = 10, callback) {
     else if(callback) {
         callback();
     }
+
+    if(outputElement)
+        scrollToBottom(); 
 }
 
 function showLoginForm() {
