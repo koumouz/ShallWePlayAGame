@@ -49,7 +49,7 @@ const imageAPIURL = 'https://api.openai.com/v1/images/generations';
 /* End OpenAI API */
 
 // Game Rules
-let gamePrompt = await loadGamePrompt('gamePrompts/adventure1.txt');
+let gamePrompt = await loadGamePrompt('gamePrompts/adventure1-optimized.txt');
 
 // Prompt to tell the model to also generate an image prompt
 const createImagePrompt = "Additionally, create a prompt for stable diffusion to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt.";
@@ -58,8 +58,8 @@ const createImagePrompt = "Additionally, create a prompt for stable diffusion to
 const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art"
 
 const createImages = true;
-const numMaxTokens = 300;
-const temperature = .5;
+const numMaxTokens = 600;
+const temperature = .7;
 /* End Prompts and Knobs */
 
 /* Begin Routes */
