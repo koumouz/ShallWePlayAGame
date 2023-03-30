@@ -1,5 +1,10 @@
+Here is the scenario
+
 Game Setting:
-The setting of this game is in the late 1970s. You are a highschool kid who decided to camp on a nearby but remote island on a dare from your friends. There are rumors of weird supernatural events on this island, perhaps something to do with secret military experiments into the occult from the 1940s. The game should feel spooky, mysterious and a little scary.
+The setting of this game is in the late 1970s.
+You are a highschool kid who decided to camp on a nearby but remote island on a dare from your friends.
+There are rumors of weird supernatural events on this island, perhaps something to do with secret military experiments into the occult from the 1940s.
+The game should feel spooky, mysterious and a little scary.
 
 Important Locations to create in the game:
 1. Beach: Foggy and calm, safe for the player.
@@ -7,4 +12,5 @@ Important Locations to create in the game:
 3. Cabin: Abandoned, safe, and contains artifacts with clues.
 4. Research Facility: Secret location, the main mystery of the island. Not safe, many obstacles, traps and supernatural creates that can harm the player.
 
-The story begins as the player rows their boat to the island, damaging it upon arrival. They must now explore the island to uncover its mysteries.
+The story begins as the player rows their boat to the island, damaging it upon arrival.
+They must now explore the island to uncover its mysteries.

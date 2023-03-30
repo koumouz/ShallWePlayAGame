@@ -7,7 +7,7 @@ const turnHistory = [];
 const introText = 'Would you like to play a game?';
 var turnCount = 0;
 const maxTurns = 10; // TODO: move this server side
-const gameOverString = "You have reached the end of thi game session. For now, games are limited to " + maxTurns + " turns but we'll be expanding on this in the future. Thanks for playing!"
+const gameOverString = "You have reached the end of this game session. For now, games are limited to " + maxTurns + " turns but we'll be expanding on this in the future. Thanks for playing!"
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (document.getElementById('intro-text')) {
