@@ -56,7 +56,7 @@ let gamePrompt = await loadPromptFromFile('gamePrompts/the_island-v3.1.txt');
 const createImagePrompt = "Additionally, create a prompt for stable diffusion to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt.";
 
 // Style prompt for the image, this is appended to all image prompts
-const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art, ensure there are no watermarks, logos, or text anywhere in the image."
+const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art, there must be no watermarks, logos, or text in the image."
 
 const createImages = true;     //default: true
 const numMaxTokens = 600;        //default: 600
