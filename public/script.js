@@ -57,8 +57,6 @@ async function generateNextTurn(prompt) {
     }
 
     turnHistory.push({"role": "assistant", "content": response.text});
-
-    console.log(turnHistory);
     return response;
 }
 
@@ -113,6 +111,9 @@ async function processCommand(command) {
     // TODO: move this server side
     if(turnCount >= maxTurns) {
         gameOver();
+        return;
+    }
+    else if (command.length > 50) {
         return;
     }
        
