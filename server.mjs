@@ -106,7 +106,7 @@ app.post('/api/generateImage', async (req, res) => {
     try {
         const imagePayload = await generateImage(prompt);
         res.type('image/png');
-        res.set('X-Image-Alt-Text', imagePayload.imageAltText);
+        res.set('X-Image-Alt-Text', sanitizeToASCII(imagePayload.imageAltText));
         res.send(imagePayload.image);
     } catch (error) {
         console.error('Error generating image:', error);
@@ -128,6 +128,9 @@ async function generateNextTurn(history) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
     };
+
+    // Do a quick (and crude) check to make sure there are no security issues in the prompt
+    history[history.length - 1].content = sanitize(history[history.length - 1].content);
 
     // Update the most recent prompt to append the "createImagePrompt" prompt, so we can have nice fancy images
     history[history.length - 1].content = history[history.length - 1].content + createImagePrompt;
@@ -175,6 +178,9 @@ async function generateImage(prompt) {
         // Clean up the prompt in a lazy way (I will fix this eventually)
         prompt = prompt.slice(0, -1) + imageStyle;
         prompt = prompt.substring(2);
+
+        // Do a quick (and crude) check to make sure there are no security issues in the prompt
+        prompt = sanitize(prompt);
 
         // DEBUG
         //console.log("\nGenerate Image: " + prompt);
@@ -236,6 +242,23 @@ function isAuthenticated(req, res, next) {
     res.redirect('/');
   }
 }
+
+function sanitizeToASCII(str) {
+    return str.replace(/[^\x00-\x7F]/g, '');
+}
+
+function sanitize(str) {
+    // Remove potential HTML elements
+    str = str.replace(/<[^>]*>/g, '');
+  
+    // Remove potential ECMAScript method calls
+    str = str.replace(/\./g, '');
+  
+    // Remove single quotes
+    str = str.replace(/'/g, '');
+  
+    return str;
+  }
 
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
