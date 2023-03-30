@@ -107,6 +107,8 @@ async function generateImage(prompt) {
 }
 
 async function processCommand(command) {
+    disableUserInput();
+
     // Create a (crude, will fix later) limit to cap the number of turns the player can make
     // TODO: move this server side
     if(turnCount >= maxTurns) {
@@ -161,7 +163,7 @@ function updateOutputText(command, outputText) {
     outputElement.appendChild(document.createElement('br'));
 
     // Type the response text with animation
-    typeText(responseElement, outputText.trim(), 0, 10, scrollToBottom);
+    typeText(responseElement, outputText.trim(), 0, 10, enableUserInput);
 }
 
 async function makeRequest(url, body) {
@@ -199,6 +201,17 @@ function typeText(element, text, index = 0, interval = 10, callback) {
 
     if(outputElement)
         scrollToBottom(); 
+}
+
+function enableUserInput() {
+    // Enable user input when we are ready to receive a command
+    inputElement.disabled = false;
+    inputElement.focus();
+}
+
+function disableUserInput() {
+    // Disable user input while we process a command
+    inputElement.disabled = true;
 }
 
 function showLoginForm() {
