@@ -49,7 +49,8 @@ const imageAPIURL = 'https://api.openai.com/v1/images/generations';
 /* End OpenAI API */
 
 // Game Rules
-let gamePrompt = await loadGamePrompt('gamePrompts/the_island-optimized.txt');
+let systemPrompt = await loadPromptFromFile('gamePrompts/interactive_fiction_system.txt');
+let gamePrompt = await loadPromptFromFile('gamePrompts/the_island-v3.1.txt');
 
 // Prompt to tell the model to also generate an image prompt
 const createImagePrompt = "Additionally, create a prompt for stable diffusion to create an image that maps to the scene. This should always be the last sentence of your response and it should beging with IMAGE_PROMPT: and then the prompt.";
@@ -130,6 +131,7 @@ async function generateNextTurn(history) {
 
     // Update the most recent prompt to append the "createImagePrompt" prompt, so we can have nice fancy images
     history[history.length - 1].content = history[history.length - 1].content + createImagePrompt;
+    history.splice(history.length - 2, 0, {"role": "system", "content": systemPrompt});
 
     // Generate the text
     const textRequestBody = JSON.stringify({
@@ -217,7 +219,7 @@ async function generateImage(prompt) {
 }
 
 // Load gamePrompt from file
-async function loadGamePrompt(path) {
+async function loadPromptFromFile(path) {
   try {
     const content = await fs.readFile(path, 'utf8');
     return content;

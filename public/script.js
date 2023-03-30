@@ -57,6 +57,8 @@ async function generateNextTurn(prompt) {
     }
 
     turnHistory.push({"role": "assistant", "content": response.text});
+
+    console.log(turnHistory);
     return response;
 }
 
