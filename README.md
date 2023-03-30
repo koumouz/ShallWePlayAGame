@@ -7,7 +7,8 @@ content the player interacts with is generated in real time, creating a unique p
 
 This allows for much greater player agency as players are no longer confined to the crude text parsers of the 80s and instead can really explore
 their surrounding with rich text commands. The narrative can take many turns as the LLM determines where to go based on the player input, while
-ensuring some structure based on initial game prompts (to set a base scenerio and outline for the game).
+ensuring some structure based on initial game prompts (to set a base scenerio and outline for the game). The goal is take turn hallucination into a
+feature, not a bug. With that said - every once in a while you may seem some pretty strange behaviors!
 
 The interface and gameplay was inspired by the interactive fiction games of the 1980s, which
 I grew up playing (the first computer monitors I used were <a href="https://en.wikipedia.org/wiki/Monochrome_monitor" target="_blank">
