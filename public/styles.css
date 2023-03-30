@@ -144,8 +144,28 @@ body, html {
     display: none;
 }
 
+.footer {
+    position: absolute;
+    bottom: 0;
+    padding-bottom: 20px;
+    width: 800px;
+    text-align: center;
+    font-size: 8pt;
+    color: #FFA500;
+}
+
 .hidden {
     display: none;
+}
+
+a {
+    color: #FFA500;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+a:hover {
+    text-decoration: underline;
 }
 
 button {
