@@ -286,6 +286,7 @@ async function getGameProgress(gameKey) {
             if (line.trim() !== '') {
               const jsonObject = JSON.parse(line);
               gameTurnHistory.push(jsonObject);
+              console.log(line);
             }
           }
 
