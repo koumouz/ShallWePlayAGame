@@ -3,11 +3,12 @@ const outputElement = document.getElementById('output');
 const gameTitleTextElement = document.getElementById('game-title-text');
 const turnCountTextElement = document.getElementById('turn-count-text');
 const typedTextElement = document.getElementById('typed-text');
-const turnHistory = [];
 const introText = 'Would you like to play a game?';
-var turnCount = 0;
 const maxTurns = 10; // TODO: move this server side
 const gameOverString = "You have reached the end of this game session. For now, games are limited to " + maxTurns + " turns but we'll be expanding on this in the future. Thanks for playing!"
+
+var gameKey = null;
+var turnCount = 0;
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (document.getElementById('intro-text')) {
@@ -45,18 +46,52 @@ async function initGame() {
     });
 }
 
+async function processCommand(command) {
+    disableUserInput();
+
+    // Create a (crude, will fix later) limit to cap the number of turns the player can make
+    // TODO: move this server side
+    if(turnCount >= maxTurns) {
+        gameOver();
+        return;
+    }
+    else if (command.length > 50) {
+        return;
+    }
+       
+    let response = await generateNextTurn(command);
+
+    // Create a request to generate an image based on the descriptive prompt
+    if(response.imagePrompt) {
+        generateImage(response.imagePrompt);
+    }
+
+    // Clear out the past command
+    inputElement.value = '';
+    inputElement.focus();
+
+    //Update the output text
+    updateOutputText(command, response.text);
+
+    // Update the turn counter
+    turnCount++;
+    turnCountTextElement.textContent = "Turn: " + turnCount;
+}
+
 async function generateNextTurn(prompt) {
     let response = null;
 
     if(prompt == "Start a New Game") {
         response = await makeRequest('/api/initGame');
+        gameKey = response.gameKey;
     } else {
-        turnHistory.push({"role": "user", "content": prompt});
-        let body = JSON.stringify({ turnHistory: turnHistory });
+        let body = JSON.stringify({
+            gameKey: gameKey,
+            prompt: prompt
+        });
         response = await makeRequest('/api/generateNextTurn', body);
     }
 
-    turnHistory.push({"role": "assistant", "content": response.text});
     return response;
 }
 
@@ -104,38 +139,6 @@ async function generateImage(prompt) {
     } else {
         console.error('Error generating image:', response.statusText);
     }
-}
-
-async function processCommand(command) {
-    disableUserInput();
-
-    // Create a (crude, will fix later) limit to cap the number of turns the player can make
-    // TODO: move this server side
-    if(turnCount >= maxTurns) {
-        gameOver();
-        return;
-    }
-    else if (command.length > 50) {
-        return;
-    }
-       
-    let response = await generateNextTurn(command);
-
-    // Create a request to generate an image based on the descriptive prompt
-    if(response.imagePrompt) {
-        generateImage(response.imagePrompt);
-    }
-
-    // Clear out the past command
-    inputElement.value = '';
-    inputElement.focus();
-
-    //Update the output text
-    updateOutputText(command, response.text);
-
-    // Update the turn counter
-    turnCount++;
-    turnCountTextElement.textContent = "Turn: " + turnCount;
 }
 
 function gameOver() {
