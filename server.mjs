@@ -24,11 +24,10 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false }, // Change to `true` if using HTTPS
+    cookie: { secure: false },
   })
 );
 
-/*
 // Middleware to protect game.html
 app.use('/game.html', (req, res, next) => {
   if (req.session.authenticated) {
@@ -37,7 +36,6 @@ app.use('/game.html', (req, res, next) => {
     res.redirect('/');
   }
 });
-*/
 
 app.use(express.static(__dirname + '/public')); // Serve files from the public folder
 
@@ -54,7 +52,7 @@ let systemRulesPrompt = await loadPromptFromFile('gamePrompts/interactive_fictio
 let gameScenarioPrompt = await loadPromptFromFile('gamePrompts/the_island-v3.1.txt');
 
 // Prompt to tell the model to also generate an image prompt
-const createImagePrompt = "Additionally, write a prompt for image that looks like the current scene you just described. This should always be the last sentence of your response and it should begin with IMAGE_PROMPT:";
+const createImagePrompt = "\n\nFinally, create a prompt for DALL-E to create an image that looks like the scene you just described. This should always be the last sentence of your response and it should begin with IMAGE_PROMPT:";
 
 // Style prompt for the image, this is appended to all image prompts
 const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art, there must be no watermarks, logos, or text in the image."
@@ -140,9 +138,12 @@ async function generateNextTurn(gameKey, prompt) {
         gameTurnHistory = await getGameProgress(gameKey);  // Get the history of game turns to date. We need to send the complete history to the API to maintain state
         prompt = sanitize(prompt); // Do a quick (and crude) check to make sure there are no security issues in the prompt
         let formattedPrompt = {"role": "user", "content": prompt} // Format the command so we can send to the model API
-        formattedPrompt.content + '. ' + createImagePrompt;     // Append the "createImagePrompt" prompt, so we can have nice fancy images
         gameTurnHistory.push({"role": "system", "content": systemRulesPrompt})   // Now add in the system prompt
         gameTurnHistory.push(formattedPrompt); // Finally add the new command
+    }
+
+    if(createImages) {
+        gameTurnHistory[gameTurnHistory.length -1].content += '. ' + createImagePrompt;     // Append the "createImagePrompt" prompt to the final prompt, so we can have nice fancy image
     }
 
     const textRequestBody = JSON.stringify({
@@ -195,8 +196,6 @@ async function generateImage(prompt) {
         prompt = prompt.slice(0, -1) + imageStyle;
         prompt = prompt.substring(2);
         prompt = sanitize(prompt);  // Do a quick (and crude) check to make sure there are no security issues in the prompt
-
-        console.log("IMAGE PROMPT: " + prompt);
 
         const headers = {
             'Content-Type': 'application/json',
@@ -251,20 +250,16 @@ function generateGameKey(gameScenarioString) {
 
 async function saveGameProgress(gameKey, gameHistory) {
     // These files are important - they maintain the state for each game session
-    // (plus they are useful for debugging)
     const saveFileName = gameKey + '.log';
     const saveFilePath = 'gameStates/' + saveFileName;
 
     try {
-      // Check if the file exists
       await fs.access(saveFilePath);
   
     } catch (error) {
-      // If the file doesn't exist, create it
       if (error.code === 'ENOENT') {
         await fs.writeFile(saveFilePath, '');
       } else {
-        // If there is an error other than 'ENOENT', re-throw the error
         throw error;
       }
     }
@@ -281,7 +276,6 @@ async function getGameProgress(gameKey) {
     const saveFilePath = 'gameStates/' + saveFileName;
 
     try {
-        // Check if the file exists
         const gameTurnHistory = [];
         const fileData = await fs.readFile(saveFilePath, 'utf8');
         const lines = fileData.split('\n');
@@ -299,7 +293,6 @@ async function getGameProgress(gameKey) {
       }
 }
 
-// Load gamePrompt from file
 async function loadPromptFromFile(filePath) {
     try {
         const content = await fs.readFile(filePath, 'utf8');

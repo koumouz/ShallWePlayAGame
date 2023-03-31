@@ -49,7 +49,6 @@ async function initGame() {
 async function processCommand(command) {
     disableUserInput();
 
-    // Create a (crude, will fix later) limit to cap the number of turns the player can make
     // TODO: move this server side
     if(turnCount >= maxTurns) {
         gameOver();
