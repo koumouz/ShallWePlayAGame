@@ -269,6 +269,8 @@ async function saveGameProgress(gameKey, gameHistory) {
     for(let i=startIndex; i < gameHistory.length; i++) {
         await fs.appendFile(saveFilePath, JSON.stringify(gameHistory[i]) + '\n');
     }
+
+    console.log("Saving: " + saveFilePath);
   }
 
 async function getGameProgress(gameKey) {
@@ -276,6 +278,7 @@ async function getGameProgress(gameKey) {
     const saveFilePath = 'gameStates/' + saveFileName;
 
     try {
+        console.log("Reading: " + saveFilePath);
         const gameTurnHistory = [];
         const fileData = await fs.readFile(saveFilePath, 'utf8');
         const lines = fileData.split('\n');
