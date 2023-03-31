@@ -6,6 +6,7 @@ import fs from 'fs/promises';
 import session from 'express-session';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import redis from 'redis';
 
 if (process.env.NODE_ENV !== 'production') {
   dotenv.config({ path: './config.env' });
@@ -38,6 +39,19 @@ app.use('/game.html', (req, res, next) => {
 });
 
 app.use(express.static(__dirname + '/public')); // Serve files from the public folder
+
+app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+});
+
+// Get the Reddis URL and then create the Redis client for managing game state
+const redisClient = redis.createClient({
+    url: process.env.REDIS_TLS_URL,
+    socket: {
+        tls: true,
+        rejectUnauthorized: false,
+      }
+});
 
 /* Core Prompts and Knobs*/
 
@@ -107,7 +121,7 @@ app.post('/api/generateImage', async (req, res) => {
         try {
             const imagePayload = await generateImage(prompt);
             res.type('image/png');
-            res.set('X-Image-Alt-Text', sanitizeToASCII(imagePayload.imageAltText));
+            res.set('X-Image-Alt-Text', convertToASCII(imagePayload.imageAltText));
             res.send(imagePayload.image);
         } catch (error) {
             console.error('Error generating image:', error);
@@ -118,6 +132,7 @@ app.post('/api/generateImage', async (req, res) => {
 /* End Routes */
 
 async function initGame() {
+    await connectRedisClient();
     let response = generateNextTurn();  // If no gameKey or command are sent, create a new game
     return response;
 }
@@ -135,7 +150,7 @@ async function generateNextTurn(gameKey, prompt) {
         gameTurnHistory.push({"role": "system", "content": systemRulesPrompt})   // Now add in the system prompt
         gameTurnHistory.push({"role": "user", "content": gameScenarioPrompt})       // Send the game scenario creation prompt
     } else {
-        gameTurnHistory = await getGameProgress(gameKey);  // Get the history of game turns to date. We need to send the complete history to the API to maintain state
+        gameTurnHistory = await loadGameProgress(gameKey);  // Get the history of game turns to date. We need to send the complete history to the API to maintain state
         prompt = sanitize(prompt); // Do a quick (and crude) check to make sure there are no security issues in the prompt
         let formattedPrompt = {"role": "user", "content": prompt} // Format the command so we can send to the model API
         gameTurnHistory.push({"role": "system", "content": systemRulesPrompt})   // Now add in the system prompt
@@ -184,7 +199,7 @@ async function generateNextTurn(gameKey, prompt) {
     // update the game state file. Remove the system prompt and add the most recent assistant response
     gameTurnHistory.splice(gameTurnHistory.length - 2, 1);
     gameTurnHistory.push({"role": "assistant", "content": textData.choices[0].message.content});
-    saveGameProgress(gameKey, gameTurnHistory);
+    await saveGameProgress(gameKey, gameTurnHistory);
 
     return response;
 }
@@ -243,54 +258,32 @@ function generateGameKey(gameScenarioString) {
     const gameScenario = gameScenarioString;
     const hash = crypto.createHash('sha256');
     hash.update(gameScenario);
-    const gameKey = hash.digest('hex');
+    const gameKey = 'game_' + hash.digest('hex');
     
     return gameKey;
 }
-
+  
 async function saveGameProgress(gameKey, gameHistory) {
-    // These files are important - they maintain the state for each game session
-    const saveFileName = gameKey + '.log';
-    const saveFilePath = 'gameStates/' + saveFileName;
+    const gameHistoryJSON = JSON.stringify(gameHistory);
 
     try {
-      await fs.access(saveFilePath);
-  
+        const reply = await redisClient.set(gameKey, gameHistoryJSON);
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        await fs.writeFile(saveFilePath, '');
-      } else {
-        throw error;
-      }
+        console.error('Error saving game progress to Redis:', error);
     }
+    return;
+}
   
-    // Update the file with any new rows
-    const startIndex = Math.max(0, gameHistory.length - 2)
-    for(let i=startIndex; i < gameHistory.length; i++) {
-        await fs.appendFile(saveFilePath, JSON.stringify(gameHistory[i]) + '\n');
-    }
-  }
-
-async function getGameProgress(gameKey) {
-    const saveFileName = gameKey + '.log';
-    const saveFilePath = 'gameStates/' + saveFileName;
-
+async function loadGameProgress(gameKey) {
     try {
-        const gameTurnHistory = [];
-        const fileData = await fs.readFile(saveFilePath, 'utf8');
-        const lines = fileData.split('\n');
-        for (const line of lines) {
-            if (line.trim() !== '') {
-              const jsonObject = JSON.parse(line);
-              gameTurnHistory.push(jsonObject);
-            }
-          }
+        const gameHistoryJSON = await redisClient.get(gameKey);
+        const gameHistory = JSON.parse(gameHistoryJSON);
 
-        return gameTurnHistory;
-    
-      } catch (error) {
-        throw error;
-      }
+        return gameHistory;
+    } catch (error) {
+        console.error('Error retrieving game progress from Redis:', error);
+    }
+    return;
 }
 
 async function loadPromptFromFile(filePath) {
@@ -302,6 +295,18 @@ async function loadPromptFromFile(filePath) {
     }
 }
 
+async function connectRedisClient() {
+    redisClient.connect();
+    console.log("Connecting to Redis...");
+
+    redisClient.on('connect', function() {
+        console.log('Connected to Redis!');
+    });
+    redisClient.on('error', function(error) {
+        console.error('Error connecting to Redis:', error);
+    });
+}
+
 function isAuthenticated(req, res, next) {
   if (req.session.authenticated) {
     next();
@@ -310,23 +315,23 @@ function isAuthenticated(req, res, next) {
   }
 }
 
-function sanitizeToASCII(str) {
+/* Helper Methods */
+// It does what it says on the tin
+function convertToASCII(str) {
     return str.replace(/[^\x00-\x7F]/g, '');
 }
 
+// Best (quick) effort at removing any potentially dangerous strings from user input
 function sanitize(str) {
     // Remove potential HTML elements
     str = str.replace(/<[^>]*>/g, '');
-  
+
     // Remove potential ECMAScript method calls
     str = str.replace(/\./g, '');
-  
+
     // Remove single quotes
     str = str.replace(/'/g, '');
-  
-    return str;
-  }
 
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-});
+    return str;
+}
+/* End Helper Methods */
