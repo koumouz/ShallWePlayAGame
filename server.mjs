@@ -12,14 +12,38 @@ if (process.env.NODE_ENV !== 'production') {
   dotenv.config({ path: './config.env' });
 }
 
+// Initialize things
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
 const app = express();
 const port = process.env.PORT || 3000;
+let turnCount = 0;
+
+/* OpenAI API Endpoints */
+const apiKey = process.env.API_KEY;
+const textAPIURL = 'https://api.openai.com/v1/chat/completions';
+const imageAPIURL = 'https://api.openai.com/v1/images/generations';
+
+/* Prompts and Knobs*/
+const maxTurns = 10;                 //default: 10
+const createImages = true;          //default: true
+const numMaxTokens = 1000;          //default: 1000
+const temperature = .5;             //default: 0.5
+const model = 'gpt-3.5-turbo';      //default: gpt-3.5-turbo
+
+// Game Rules
+let systemRulesPrompt = await loadPromptFromFile('gamePrompts/interactive_fiction_system.txt');
+let gameScenarioPrompt = await loadPromptFromFile('gamePrompts/the_island-v3.1.txt');
+
+// Prompt to tell the model to also generate an image prompt
+const createImagePrompt = "\n\nFinally, create a prompt for DALL-E to create an image that looks like the scene you just described. This should always be the last sentence of your response and it should begin with IMAGE_PROMPT:";
+
+// Style prompt for the image, this is appended to all image prompts
+const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art, there must be no watermarks, logos, or text in the image."
+const gameOverString = "You have reached the end of this game session. For now, games are limited to " + maxTurns + " turns but we'll be expanding on this in the future. Thanks for playing!"
+/* End Prompts and Knobs */
 
 app.use(express.json({ limit: '50mb' }));
-
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
@@ -31,18 +55,16 @@ app.use(
 
 // Middleware to protect game.html
 app.use('/game.html', (req, res, next) => {
-  if (req.session.authenticated) {
-    next();
-  } else {
-    res.redirect('/');
-  }
+    console.log("Authenticated: " + req.session.authenticated);
+    if (req.session.authenticated) {
+        next();
+    } else {
+        res.redirect('/');
+    }
 });
 
-app.use(express.static(__dirname + '/public')); // Serve files from the public folder
-
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-});
+// Serve files from the public folder
+app.use(express.static(__dirname + '/public')); 
 
 // Get the Reddis URL and then create the Redis client for managing game state
 const redisClient = redis.createClient({
@@ -52,29 +74,6 @@ const redisClient = redis.createClient({
         rejectUnauthorized: false,
       }
 });
-
-/* Core Prompts and Knobs*/
-
-/* OpenAI API */
-const apiKey = process.env.API_KEY;
-const textAPIURL = 'https://api.openai.com/v1/chat/completions';
-const imageAPIURL = 'https://api.openai.com/v1/images/generations';
-/* End OpenAI API */
-
-// Game Rules
-let systemRulesPrompt = await loadPromptFromFile('gamePrompts/interactive_fiction_system.txt');
-let gameScenarioPrompt = await loadPromptFromFile('gamePrompts/the_island-v3.1.txt');
-
-// Prompt to tell the model to also generate an image prompt
-const createImagePrompt = "\n\nFinally, create a prompt for DALL-E to create an image that looks like the scene you just described. This should always be the last sentence of your response and it should begin with IMAGE_PROMPT:";
-
-// Style prompt for the image, this is appended to all image prompts
-const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art, there must be no watermarks, logos, or text in the image."
-
-const createImages = true;     //default: true
-const numMaxTokens = 600;        //default: 1000
-const temperature = .7;         //default: 0.7
-/* End Prompts and Knobs */
 
 /* Begin Routes */
 app.post('/api/authenticate', (req, res) => {
@@ -131,6 +130,11 @@ app.post('/api/generateImage', async (req, res) => {
 });
 /* End Routes */
 
+app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+});
+
+
 async function initGame() {
     await connectRedisClient();
     let response = generateNextTurn();  // If no gameKey or command are sent, create a new game
@@ -138,6 +142,11 @@ async function initGame() {
 }
 
 async function generateNextTurn(gameKey, prompt) {
+    // If the turn count is maxed, then it's game over. Cuz this shit is expensive...
+    if(turnCount >= maxTurns) {
+        return generateGameOverReponse(gameKey, 'turnLimitExceeded');
+    }
+
     const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
@@ -162,7 +171,7 @@ async function generateNextTurn(gameKey, prompt) {
     }
 
     const textRequestBody = JSON.stringify({
-        model: 'gpt-3.5-turbo',
+        model: model,
         messages: gameTurnHistory,
         max_tokens: numMaxTokens,
         n: 1,
@@ -180,19 +189,34 @@ async function generateNextTurn(gameKey, prompt) {
 
     if (!textData.choices || textData.choices.length === 0) {
         console.error('Unexpected API response:', textData);
-        throw new Error('Invalid response from OpenAI API');
+
+        switch(textData.code) {
+            case '429':
+                // API Quota exceeded. Send a game over message and terminate the game
+                console.error('Error: Open AI API quota exceeded');
+                return generateGameOverReponse(gameKey, 'APIQuotaExceeded');
+                break;
+            default:
+                console.error('Error: Something went wrong, probably with how the OpenAI API was called.');
+                return generateGameOverReponse(gameKey);  
+                break;     
+        }
     }
 
     // If there was no gameKey, make one as it's a new game
     if(gameKey == null) {
         // The gameKey is based on the first 50 characters of the rendered game scenario
         gameKey = generateGameKey(textData.choices[0].message.content.substring(0, 50));
+        turnCount = 1;
+    } else {
+        turnCount++;
     }
 
     // Split the text response so we can get the image prompt out
     const substrs = textData.choices[0].message.content.split('IMAGE_PROMPT');
     let response = {};
     response.gameKey = gameKey;  // Return the key back to the client, every time. It will need it to maintain state.
+    response.turnCount = turnCount;
     response.text = substrs[0];
     response.imagePrompt = substrs[1];
 
@@ -262,7 +286,28 @@ function generateGameKey(gameScenarioString) {
     
     return gameKey;
 }
-  
+
+function generateGameOverReponse(gameKey, reason) {
+    let response = {};
+    response.gameKey = gameKey;
+    response.turnCount = turnCount;
+    response.gameOver = 'true';
+
+    switch(reason) {
+        case 'turnLimitExceeded':
+            response.text = gameOverString;
+            break;
+        case 'APIQuotaExceeded':
+            response.text = "Do to the immense popularity of this game we have exceeded our capacity! Unfortunately it's game over for now, but we're working hard on recruiting more gnomes to power the AI machinery... Check back soon :)"
+            break;
+        default:
+            response.text = "Hmm. Something went wrong and we're not quite sure what it is. Check back soon, maybe it's fixed. Or maybe it's not. Welcome to our probalistic future :)"
+            break;
+    }
+
+    return response;
+}
+
 async function saveGameProgress(gameKey, gameHistory) {
     const gameHistoryJSON = JSON.stringify(gameHistory);
 
@@ -296,23 +341,16 @@ async function loadPromptFromFile(filePath) {
 }
 
 async function connectRedisClient() {
-    redisClient.connect();
     console.log("Connecting to Redis...");
+    redisClient.connect().catch(error => {});
 
     redisClient.on('connect', function() {
         console.log('Connected to Redis!');
     });
+
     redisClient.on('error', function(error) {
         console.error('Error connecting to Redis:', error);
     });
-}
-
-function isAuthenticated(req, res, next) {
-  if (req.session.authenticated) {
-    next();
-  } else {
-    res.redirect('/');
-  }
 }
 
 /* Helper Methods */

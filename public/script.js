@@ -4,8 +4,6 @@ const gameTitleTextElement = document.getElementById('game-title-text');
 const turnCountTextElement = document.getElementById('turn-count-text');
 const typedTextElement = document.getElementById('typed-text');
 const introText = 'Would you like to play a game?';
-const maxTurns = 10; // TODO: move this server side
-const gameOverString = "You have reached the end of this game session. For now, games are limited to " + maxTurns + " turns but we'll be expanding on this in the future. Thanks for playing!"
 
 var gameKey = null;
 var turnCount = 0;
@@ -49,16 +47,17 @@ async function initGame() {
 async function processCommand(command) {
     disableUserInput();
 
-    // TODO: move this server side
-    if(turnCount >= maxTurns) {
-        gameOver();
-        return;
-    }
-    else if (command.length > 50) {
+    if (command.length > 50) {
         return;
     }
        
     let response = await generateNextTurn(command);
+
+    // If the game is over, then... end the game
+    if(response.gameOver == 'true') {
+        gameOver(response.text);
+        return;
+    }
 
     // Create a request to generate an image based on the descriptive prompt
     if(response.imagePrompt) {
@@ -73,7 +72,7 @@ async function processCommand(command) {
     updateOutputText(command, response.text);
 
     // Update the turn counter
-    turnCount++;
+    turnCount = response.turnCount;
     turnCountTextElement.textContent = "Turn: " + turnCount;
 }
 
@@ -140,7 +139,8 @@ async function generateImage(prompt) {
     }
 }
 
-function gameOver() {
+function gameOver(gameOverString) {
+    document.getElementById('loader').className = "hidden";
     updateOutputText('', gameOverString);
     const inputLineElement = document.getElementById('input-line');
     inputElement.textContent = '';
