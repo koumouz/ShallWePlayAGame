@@ -33,7 +33,7 @@ const model = 'gpt-3.5-turbo';      //default: gpt-3.5-turbo
 
 // Game Rules
 let systemRulesPrompt = await loadPromptFromFile('gamePrompts/interactive_fiction_system.txt');
-let gameScenarioPrompt = await loadPromptFromFile('gamePrompts/the_island-v3.1.txt');
+let gameScenarioPrompt = await loadPromptFromFile('gamePrompts/the_island.txt');
 
 // Prompt to tell the model to also generate an image prompt
 const createImagePrompt = "\n\nFinally, create a prompt for DALL-E to create an image that looks like the scene you just described. This should always be the last sentence of your response and it should begin with IMAGE_PROMPT:";
