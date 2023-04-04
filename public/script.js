@@ -55,7 +55,7 @@ async function processCommand(command) {
 
     // If the game is over, then... end the game
     if(response.gameOver == 'true') {
-        gameOver(response.text);
+        gameOver(command, response.text);
         return;
     }
 
@@ -139,9 +139,12 @@ async function generateImage(prompt) {
     }
 }
 
-function gameOver(gameOverString) {
+function gameOver(command, gameOverString) {
+
+    // TODO: clean up how this displays so we don't show an empty prompt
+
     document.getElementById('loader').className = "hidden";
-    updateOutputText('', gameOverString);
+    updateOutputText(command, gameOverString);
     const inputLineElement = document.getElementById('input-line');
     inputElement.textContent = '';
     inputElement.removeEventListener('keydown', (event) => {
