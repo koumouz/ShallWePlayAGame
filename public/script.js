@@ -35,7 +35,7 @@ async function initGame() {
     // Get ready for player input
     inputElement.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
-            if(inputElement.value.length > 3) {
+            if(inputElement.value.length >= 3) {
                 event.preventDefault();
                 processCommand(inputElement.value);
                 inputElement.value = 'Thinking...';
