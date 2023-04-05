@@ -33,8 +33,8 @@ const model = 'gpt-3.5-turbo';      //default: gpt-3.5-turbo
 const defaultGameScenario = 'the_island';
 
 // Game Rules
-const promptFilePath = 'gamePrompts/';
-const systemPromptPath = 'interactive_fiction_system';
+const promptFilePath = 'prompts/';
+const systemPromptPath = 'system/interactive_fiction';
 let systemRulesPrompt = null;
 let gameScenarioPrompt = null;
 
@@ -146,7 +146,7 @@ async function startGame(gameScenario) {
         gameScenario = defaultGameScenario;
     
     systemRulesPrompt = await loadPromptFromFile(promptFilePath + systemPromptPath + '.txt');
-    gameScenarioPrompt = await loadPromptFromFile(promptFilePath + defaultGameScenario + '.txt');
+    gameScenarioPrompt = await loadPromptFromFile(promptFilePath + 'games/' + defaultGameScenario + '.txt');
 
     let response = generateNextTurn();  // If no gameKey or command are sent, create a new game
     return response;
