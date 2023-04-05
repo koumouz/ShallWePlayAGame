@@ -30,10 +30,13 @@ const createImages = true;          //default: true
 const numMaxTokens = 1000;          //default: 1000
 const temperature = .5;             //default: 0.5
 const model = 'gpt-3.5-turbo';      //default: gpt-3.5-turbo
+const defaultGameScenario = 'the_island';
 
 // Game Rules
-let systemRulesPrompt = await loadPromptFromFile('gamePrompts/interactive_fiction_system.txt');
-let gameScenarioPrompt = await loadPromptFromFile('gamePrompts/the_island.txt');
+const promptFilePath = 'gamePrompts/';
+const systemPromptPath = 'interactive_fiction_system';
+let systemRulesPrompt = null;
+let gameScenarioPrompt = null;
 
 // Prompt to tell the model to also generate an image prompt
 const createImagePrompt = "\n\nFinally, create a prompt for DALL-E to create an image that looks like the scene you just described. This should always be the last sentence of your response and it should begin with IMAGE_PROMPT:";
@@ -55,7 +58,6 @@ app.use(
 
 // Middleware to protect game.html
 app.use('/game.html', (req, res, next) => {
-    console.log("Authenticated: " + req.session.authenticated);
     if (req.session.authenticated) {
         next();
     } else {
@@ -89,9 +91,11 @@ app.post('/api/authenticate', (req, res) => {
     }
 });
 
-app.post('/api/initGame', async (req, res) => {
+app.post('/api/startGame', async (req, res) => {
     try {
-        const response = await initGame();
+        const gameScenario = req.body.gameScenario;
+
+        const response = await startGame(gameScenario);
         res.send({ response });
     } catch (error) {
         console.error('Error initiatizing the game', error);
@@ -135,8 +139,15 @@ app.listen(port, () => {
 });
 
 
-async function initGame() {
+async function startGame(gameScenario) {
     await connectRedisClient();
+
+    if(gameScenario == null)
+        gameScenario = defaultGameScenario;
+    
+    systemRulesPrompt = await loadPromptFromFile(promptFilePath + systemPromptPath + '.txt');
+    gameScenarioPrompt = await loadPromptFromFile(promptFilePath + defaultGameScenario + '.txt');
+
     let response = generateNextTurn();  // If no gameKey or command are sent, create a new game
     return response;
 }

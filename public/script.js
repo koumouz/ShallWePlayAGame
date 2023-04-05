@@ -9,28 +9,33 @@ var gameKey = null;
 var turnCount = 0;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    if (document.getElementById('intro-text')) {
-        // Display out quick intro 
+    if (document.getElementById('game-container')) { 
+        selectGame();
+    } else if (document.getElementById('intro-text')) {
+        // Display out quick intro and splash screen
         typeText(document.getElementById('intro-text'), introText, 0, 50, showLoginForm);
-    } else {
-        // Start the game
-        initGame();
     }
 });
 
-async function initGame() { 
+function selectGame() {
+    const gameScenario = "the_island.txt";  // hard coded for now
+    gameTitleTextElement.textContent = formatTitle(gameScenario);
+    startGame(gameScenario);
+}
+
+async function startGame(gameScenario) { 
+    showLoader();
+
     // Start the game and get the initial scenario.
     turnCount = 0;
-    gameTitleTextElement.textContent = "The Island";    //hard coded for now, will fix when I added a game selector
-    await processCommand("Start a New Game");
+    await processCommand("Start Game:" + gameScenario);
 
     // Make the input-line visible
     const inputLineElement = document.getElementById('input-line');
     inputLineElement.classList.remove('hidden');
     inputElement.focus();
 
-    // Hide the initial loader
-    document.getElementById('loader').className = "hidden";
+    hideLoader();
 
     // Get ready for player input
     inputElement.addEventListener('keydown', (event) => {
@@ -79,8 +84,12 @@ async function processCommand(command) {
 async function generateNextTurn(prompt) {
     let response = null;
 
-    if(prompt == "Start a New Game") {
-        response = await makeRequest('/api/initGame');
+    if(prompt.includes("Start Game:")) {
+        let body = JSON.stringify({
+            gameScenario: prompt.split(':')[1],
+        });
+        
+        response = await makeRequest('/api/startGame', body);
         gameKey = response.gameKey;
     } else {
         let body = JSON.stringify({
@@ -208,6 +217,16 @@ function typeText(element, text, index = 0, interval = 10, callback) {
         scrollToBottom(); 
 }
 
+function formatTitle(string) {
+    let gameTitle = string.split('.')[0];
+    let words = gameTitle.split('_');
+    for(word in words) {
+        words[word] = words[word].charAt(0).toUpperCase() + words[word].slice(1);
+    }
+    gameTitle = words.join(' ');
+    return gameTitle;
+}
+
 function enableUserInput() {
     // Enable user input when we are ready to receive a command
     inputElement.disabled = false;
@@ -217,6 +236,16 @@ function enableUserInput() {
 function disableUserInput() {
     // Disable user input while we process a command
     inputElement.disabled = true;
+}
+
+function showLoader() {
+    document.getElementById('loader').textContent = "Loading, please wait..."
+    document.getElementById('loader').className = "";
+}
+
+function hideLoader() {
+    document.getElementById('loader').textContent = ""
+    document.getElementById('loader').className = "hidden";
 }
 
 function showLoginForm() {
