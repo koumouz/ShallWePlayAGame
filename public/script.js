@@ -5,52 +5,81 @@ const turnCountTextElement = document.getElementById('turn-count-text');
 const typedTextElement = document.getElementById('typed-text');
 const introText = 'Would you like to play a game?';
 
-var gameKey = null;
-var turnCount = 0;
+let gameKey = null;
+let turnCount = 0;
+let gameInSession = false;
+let availableGames = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (document.getElementById('game-container')) { 
-        selectGame();
+        showGameSelector();
     } else if (document.getElementById('intro-text')) {
         // Display out quick intro and splash screen
         typeText(document.getElementById('intro-text'), introText, 0, 50, showLoginForm);
     }
 });
 
-function selectGame() {
-    const gameScenario = "the_island.txt";  // hard coded for now
-    gameTitleTextElement.textContent = formatTitle(gameScenario);
-    startGame(gameScenario);
-}
+async function showGameSelector() {
+    const response = await makeRequest('/api/getAvailableGames');
+    availableGames = response.games;
+    let gameSelectString = "Welcome user! Would you like to play a game?\n\nAvailable games: \n";
 
-async function startGame(gameScenario) { 
-    showLoader();
-
-    // Start the game and get the initial scenario.
-    turnCount = 0;
-    await processCommand("Start Game:" + gameScenario);
+    for(let i = 0; i < availableGames.length; i++) {
+        if(availableGames[i].includes('.txt')) {
+            gameSelectString += i + ": " + availableGames[i] + "\n";
+        }
+    }
+    gameSelectString += "\n\nSelect [1 - " + (availableGames.length - 1)+ "]:";
+    updateOutputText(null, gameSelectString);
 
     // Make the input-line visible
     const inputLineElement = document.getElementById('input-line');
     inputLineElement.classList.remove('hidden');
     inputElement.focus();
 
-    hideLoader();
-
     // Get ready for player input
     inputElement.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
-            if(inputElement.value.length >= 3) {
+            if(inputElement.value.length >= 1) {
                 event.preventDefault();
                 processCommand(inputElement.value);
-                inputElement.value = 'Thinking...';
             }
         }
     });
 }
 
+function selectGame(gameScenarioIndex) {
+    gameTitleTextElement.textContent = formatTitle(availableGames[gameScenarioIndex]);
+    startGame(availableGames[gameScenarioIndex]);
+}
+
+async function startGame(gameScenario) { 
+    showLoader();
+
+    // Clear the output text
+    outputElement.innerHTML = '';
+
+    // Start the game and get the initial scenario.
+    gameInSession = true;
+    turnCount = 0;
+    await processCommand("Start Game:" + gameScenario);
+
+    hideLoader();
+}
+
 async function processCommand(command) {
+    if(!gameInSession) {    // Yes, this is a little ugly. Hack the processCommand to treat game selection as a special case. I'll clean this up later.
+        const number = parseInt(command, 10);
+        if(Number.isInteger(number) && number >= 1 && number < availableGames.length) {
+            selectGame(number);
+        } else {
+            updateOutputText('', "Please enter a value [1 - "+ (availableGames.length - 1)+ "]");
+        }
+        return;
+    }
+
     disableUserInput();
+    inputElement.value = 'Thinking...';
 
     if (command.length > 50) {
         return;
@@ -149,15 +178,13 @@ async function generateImage(prompt) {
 }
 
 function gameOver(command, gameOverString) {
-
-    // TODO: clean up how this displays so we don't show an empty prompt
+    gameInSession = false;
 
     document.getElementById('loader').className = "hidden";
     updateOutputText(command, gameOverString);
     const inputLineElement = document.getElementById('input-line');
     inputElement.textContent = '';
-    inputElement.removeEventListener('keydown', (event) => {
-    });
+    inputElement.removeEventListener('keydown', (event) => {});
     inputElement.parentElement.remove();
 }
 
@@ -167,10 +194,12 @@ function updateOutputText(command, outputText) {
     inputElement.focus();
 
     // Add command and response elements
-    const commandElement = document.createElement('div');
-    commandElement.className = 'input-line';
-    commandElement.innerHTML = `<div class="prompt">> </div><div>${command.trim()}</div>`;
-    outputElement.appendChild(commandElement);
+    if(command) {
+        const commandElement = document.createElement('div');
+        commandElement.className = 'input-line';
+        commandElement.innerHTML = `<div class="prompt">> </div><div>${command.trim()}</div>`;
+        outputElement.appendChild(commandElement);
+    }
 
     const responseElement = document.createElement('div');
     outputElement.appendChild(responseElement);
@@ -180,7 +209,7 @@ function updateOutputText(command, outputText) {
     typeText(responseElement, outputText.trim(), 0, 10, enableUserInput);
 }
 
-async function makeRequest(url, body) {
+async function makeRequest(url, body = null) {
     const headers = {
         'Content-Type': 'application/json',
     };

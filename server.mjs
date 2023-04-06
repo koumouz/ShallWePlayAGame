@@ -19,12 +19,22 @@ const app = express();
 const port = process.env.PORT || 3000;
 let turnCount = 0;
 
+app.use(express.json({ limit: '50mb' }));
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: false },
+  })
+);
+
 /* OpenAI API Endpoints */
 const apiKey = process.env.API_KEY;
 const textAPIURL = 'https://api.openai.com/v1/chat/completions';
 const imageAPIURL = 'https://api.openai.com/v1/images/generations';
 
-/* Prompts and Knobs*/
+/* Constants and Globals */
 const maxTurns = 10;                 //default: 10
 const createImages = true;          //default: true
 const numMaxTokens = 1000;          //default: 1000
@@ -44,17 +54,76 @@ const createImagePrompt = "\n\nFinally, create a prompt for DALL-E to create an 
 // Style prompt for the image, this is appended to all image prompts
 const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art, there must be no watermarks, logos, or text in the image."
 const gameOverString = "You have reached the end of this game session. For now, games are limited to " + maxTurns + " turns but we'll be expanding on this in the future. Thanks for playing!"
-/* End Prompts and Knobs */
+/* End Constants and Globals */
 
-app.use(express.json({ limit: '50mb' }));
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: true,
-    cookie: { secure: false },
-  })
-);
+/* Routes */
+app.post('/api/authenticate', (req, res) => {
+    // Hardcoded credentials
+    const username = process.env.USERNAME;
+    const password = process.env.PASSWORD;
+
+    if (req.body.username === username && req.body.password === password) {
+        req.session.authenticated = true;
+        res.json({ success: true });
+    } else {
+        res.json({ success: false });
+    }
+});
+
+app.post('/api/getAvailableGames', async (req, res) => {
+    try {
+        // Read the game prompts directory and return an array of strings for the available games to play
+        const response = {};
+        response.games = await fs.readdir(promptFilePath + 'games/');
+        res.send({ response });
+    } catch (error) {
+        console.error('Error returning game direcrory', error);
+        res.status(500).send({ error: 'An error occurred while processing your request.' });
+    }
+});
+
+app.post('/api/startGame', async (req, res) => {
+    try {
+        const gameScenario = req.body.gameScenario;
+
+        const response = await startGame(gameScenario);
+        res.send({ response });
+    } catch (error) {
+        console.error('Error starting the game', error);
+        res.status(500).send({ error: 'An error occurred while processing your request.' });
+    }
+});
+
+app.post('/api/generateNextTurn', async (req, res) => {
+    const gameKey = req.body.gameKey;
+    const prompt = req.body.prompt;
+
+    try {
+        const response = await generateNextTurn(gameKey, prompt);
+        res.type('application/json');
+        res.send({ response });
+    } catch (error) {
+        console.error('Error generating a new turn:', error);
+        res.status(500).send({ error: 'An error occurred while processing your request.' });
+    }
+});
+
+app.post('/api/generateImage', async (req, res) => {
+    const prompt = req.body.prompt;
+
+    if(createImages) {
+        try {
+            const imagePayload = await generateImage(prompt);
+            res.type('image/png');
+            res.set('X-Image-Alt-Text', convertToASCII(imagePayload.imageAltText));
+            res.send(imagePayload.image);
+        } catch (error) {
+            console.error('Error generating image:', error);
+            res.status(500).send({ error: 'An error occurred while generating the image.' });
+        }
+    }
+});
+/* End Routes */
 
 // Middleware to protect game.html
 app.use('/game.html', (req, res, next) => {
@@ -77,68 +146,12 @@ const redisClient = redis.createClient({
       }
 });
 
-/* Begin Routes */
-app.post('/api/authenticate', (req, res) => {
-    // Hardcoded credentials
-    const username = process.env.USERNAME;
-    const password = process.env.PASSWORD;
-
-    if (req.body.username === username && req.body.password === password) {
-        req.session.authenticated = true;
-        res.json({ success: true });
-    } else {
-        res.json({ success: false });
-    }
-});
-
-app.post('/api/startGame', async (req, res) => {
-    try {
-        const gameScenario = req.body.gameScenario;
-
-        const response = await startGame(gameScenario);
-        res.send({ response });
-    } catch (error) {
-        console.error('Error initiatizing the game', error);
-        res.status(500).send({ error: 'An error occurred while processing your request.' });
-    }
-});
-
-app.post('/api/generateNextTurn', async (req, res) => {
-    const gameKey = req.body.gameKey;
-    const prompt = req.body.prompt;
-
-    try {
-        const response = await generateNextTurn(gameKey, prompt);
-        res.type('application/json');
-        res.send({ response });
-    } catch (error) {
-        console.error('Error communicating with OpenAI API:', error);
-        res.status(500).send({ error: 'An error occurred while processing your request.' });
-    }
-});
-
-app.post('/api/generateImage', async (req, res) => {
-    const prompt = req.body.prompt;
-
-    if(createImages) {
-        try {
-            const imagePayload = await generateImage(prompt);
-            res.type('image/png');
-            res.set('X-Image-Alt-Text', convertToASCII(imagePayload.imageAltText));
-            res.send(imagePayload.image);
-        } catch (error) {
-            console.error('Error generating image:', error);
-            res.status(500).send({ error: 'An error occurred while generating the image.' });
-        }
-    }
-});
-/* End Routes */
-
+// Start the server
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
 
-
+/* Methods */
 async function startGame(gameScenario) {
     await connectRedisClient();
 
