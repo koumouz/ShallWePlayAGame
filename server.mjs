@@ -49,7 +49,7 @@ let systemRulesPrompt = null;
 let gameScenarioPrompt = null;
 
 // Prompt to tell the model to also generate an image prompt
-const createImagePrompt = "\n\nFinally, create a prompt for DALL-E to create an image that looks like the scene you just described. This should always be the last sentence of your response and it should begin with IMAGE_PROMPT:";
+const createImagePrompt = "\n\nFinally, create a prompt for DALL-E to create an image of the scene you just described. Keep the prompt as short and concise as possible. This should always be the last sentence of your response and it should begin with IMAGE_PROMPT:";
 
 // Style prompt for the image, this is appended to all image prompts
 const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art, there must be no watermarks, logos, or text in the image."

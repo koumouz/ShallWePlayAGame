@@ -1,4 +1,5 @@
 Game Setting:
+This game is a horror / thriller game. The tone should be scary and carry a sense of desperation and fear.
 The setting of this game is in the distant future, year 4200
 Humans have populated the solar system and live on various planets and moons.
 The player is 30 something scientist working in a lab on a remote base located on Europa. You are studying the oceans on the moon that are under the frozen surface, looking for potential signs of life.

@@ -96,6 +96,16 @@ async function processCommand(command) {
 
     let response = await generateNextTurn(command);
 
+    if(command.includes("Start Game:")) {       // Clean up this special case later...
+        command = '';                           // Shorten the command for display
+    }
+
+    // If the model determined Game Over, then... end the game (because this is a hack and you should fix it)
+    if(response.text.includes("GAME OVER")) {
+        gameOver(command, response.text);
+        return;
+    }
+
     // If the game is over, then... end the game
     if(response.gameOver == 'true') {
         gameOver(command, response.text);
