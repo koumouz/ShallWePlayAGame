@@ -1,6 +1,6 @@
-# Would you like to play a game?
+# Shall We Play a Game?
 
-"Would You Like to Play A Game?" is a prototype in generative interactive fiction
+"Shall We Play a Game??" is a prototype in generative interactive fiction
 using <a href="https://en.wikipedia.org/wiki/Large_language_model" target="_blank">large language models</a>
 and <a href="https://en.wikipedia.org/wiki/Diffusion_model" target="_blank">image diffusion models</a>. All the
 content the player interacts with is generated in real time, creating a unique playthrough on each session.
@@ -14,4 +14,4 @@ The interface and gameplay was inspired by the interactive fiction games of the 
 I grew up playing (the first computer monitors I used were <a href="https://en.wikipedia.org/wiki/Monochrome_monitor" target="_blank">
 amber CRTs</a> :)
 
-Every playthrough is unique! Check it out at https://www.wouldyouliketoplayagame.ai/
+Every playthrough is unique! Check it out at https://www.shallweplayagame.ai
