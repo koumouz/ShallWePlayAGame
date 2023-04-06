@@ -56,7 +56,7 @@ function selectGame(gameScenarioIndex) {
     startGame(availableGames[gameScenarioIndex - 1]);
 }
 
-async function startGame(gameScenario) { 
+async function startGame(gameScenario) {
     showLoader();
 
     // Clear the output text
@@ -82,7 +82,7 @@ async function processCommand(command) {
         }
         return;
     }
-
+    
     disableUserInput();
     if(command.includes("Start Game:")) {       // Clean up this special case later...
         inputElement.value = '';                // This is here because we already have
@@ -90,10 +90,10 @@ async function processCommand(command) {
         inputElement.value = 'Thinking...';  
     }
 
-    if (command.length > 50) {
+    if (command.length > 100) {
         return;
     }
-       
+
     let response = await generateNextTurn(command);
 
     // If the game is over, then... end the game
