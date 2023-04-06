@@ -1,11 +1,18 @@
 Game Setting:
-This game is a horror / thriller game. The tone should be scary and carry a sense of desperation and fear.
-The setting of this game is in the distant future, year 4200
+The setting of this game is in the distant future, year 4200. It is a science fiction game and should feel futuristic.
 Humans have populated the solar system and live on various planets and moons.
 The player is 30 something scientist working in a lab on a remote base located on Europa. You are studying the oceans on the moon that are under the frozen surface, looking for potential signs of life.
 Suddenly an alarm goes off. There is something wrong on the base. Communications with the rest of the solar system have been disrupted and all of the other scientists have mysteriously disappeared.
-The player is alone in the base, with no other human life. Though there may be some helpful (or perhaps, dangerous) AI still around that the player can interact with.
-The game should feel spooky, mysterious and a little scary.
+The player is alone in the base, with no other human life.
+
+Game Tone:
+This game is a horror / thriller game. The tone should be scary and carry a sense of desperation and fear.
+
+Important Locations:
+1. Science Lab: the location where the player was conducting research and experiments on possible alien life.
+2. The space port: the location where spaceshits and escape pods are located.
+3. The basement: a secret facility under the lab where mysterious and dangerous experiments were run. The player is unaware of this location.
+4. The Directors Office: An executive office for the director overseeing the lab. It contains secret documents the player is unaware of for clandestine and possibly illegal research being done at the lab.
 
 The story begins as the player wakes up due to the sounding klaxons. The player is disoriented and needs to figure out what is going on.
 They must now explore the base and find some way to escape it and return to Earth before they run out of supplies and life support.

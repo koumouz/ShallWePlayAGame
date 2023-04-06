@@ -1,15 +1,14 @@
 Game Setting:
-This game is a mystery. The tone should mysterious, vague and thought provoking.
-The setting of this game is in the late 1970s.
-You are a highschool kid who decided to camp on a nearby but remote island on a dare from your friends.
-There are rumors of weird supernatural events on this island, perhaps something to do with secret military experiments into the occult from the 1940s.
-The game should feel spooky, mysterious and a little scary.
+The game is set in the late 1970s, and you play as a high school student who accepts a dare from friends to camp on a remote island nearby. The island is shrouded in rumors of supernatural events, possibly linked to clandestine military experiments involving the occult during the 1940s.
 
-Important Locations to create in the game:
-1. Beach: Foggy and calm, safe for the player.
-2. Forest: Dense, misty, and dangerous, with predatory animals and supernatural monsters. Not safe at night.
-3. Cabin: Abandoned, safe, and contains artifacts with clues.
-4. Research Facility: Secret location, the main mystery of the island. Not safe, many obstacles, traps and supernatural creates that can harm the player.
+Game Tone:
+This mystery game should evoke a sense of wonder and unease, with a spooky, enigmatic, and thought-provoking atmosphere.
 
-The story begins as the player rows their boat to the island, damaging it upon arrival.
-They must now explore the island to uncover its mysteries.
+Important Locations:
+
+Beach: A foggy, serene haven for the player.
+Forest: A treacherous, mist-shrouded woodland teeming with predatory animals and supernatural creatures. Nighttime ventures are perilous.
+Cabin: A deserted shelter containing artifacts that offer crucial clues.
+Research Facility: The island's main enigma, hidden away and fraught with danger. The player must navigate numerous obstacles, traps, and supernatural threats. The player is unaware of this location.
+
+The adventure unfolds as the player rows to the island, damaging their boat upon arrival. Their quest is to explore the island and unravel its secrets.
