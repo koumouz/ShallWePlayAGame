@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function showGameSelector() {
     const response = await makeRequest('/api/getAvailableGames');
     availableGames = response.games;
-    let gameSelectString = "Welcome user! Would you like to play a game?\n\nAvailable games: \n";
+    let gameSelectString = "Greetings [USER]! Shall we play a game?\n\nAvailable games: \n";
 
     for(let i = 0; i < availableGames.length; i++) {
         if(availableGames[i].includes('.txt')) {
