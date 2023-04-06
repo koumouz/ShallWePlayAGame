@@ -26,10 +26,13 @@ async function showGameSelector() {
 
     for(let i = 0; i < availableGames.length; i++) {
         if(availableGames[i].includes('.txt')) {
-            gameSelectString += (i + 1) + ": " + availableGames[i] + "\n";
+            gameSelectString += (i + 1) + ": " + formatTitle(availableGames[i]) + "\n";
         }
     }
-    gameSelectString += "\n\nSelect [1 - " + availableGames.length + "]:";
+    
+    gameSelectString += (availableGames.length + 1)+ ": Global Thermonuclear War\n";
+    
+    gameSelectString += "\n\nSelect [1 - " + (availableGames.length + 1) + "]:";
     updateOutputText(null, gameSelectString);
 
     // Make the input-line visible
@@ -72,8 +75,10 @@ async function processCommand(command) {
         const number = parseInt(command, 10);
         if(Number.isInteger(number) && number >= 1 && number < availableGames.length) {
             selectGame(number);
+        } else if(number == availableGames.length + 1) {
+            updateOutputText('', "I'm sorry Professor, that game is no longer available. How about another game?");
         } else {
-            updateOutputText('', "Please enter a value [1 - "+ (availableGames.length - 1)+ "]");
+            updateOutputText('', "Please enter a value [1 - "+ (availableGames.length + 1)+ "]");
         }
         return;
     }
