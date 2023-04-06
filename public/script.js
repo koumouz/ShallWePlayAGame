@@ -3,7 +3,7 @@ const outputElement = document.getElementById('output');
 const gameTitleTextElement = document.getElementById('game-title-text');
 const turnCountTextElement = document.getElementById('turn-count-text');
 const typedTextElement = document.getElementById('typed-text');
-const introText = 'Would you like to play a game?';
+const introText = 'Shall we play a game?';
 
 let gameKey = null;
 let turnCount = 0;
