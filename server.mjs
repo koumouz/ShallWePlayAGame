@@ -159,7 +159,7 @@ async function startGame(gameScenario) {
         gameScenario = defaultGameScenario;
     
     systemRulesPrompt = await loadPromptFromFile(promptFilePath + systemPromptPath + '.txt');
-    gameScenarioPrompt = await loadPromptFromFile(promptFilePath + 'games/' + gameScenario + '.txt');
+    gameScenarioPrompt = await loadPromptFromFile(promptFilePath + 'games/' + gameScenario);
 
     let response = generateNextTurn();  // If no gameKey or command are sent, create a new game
     return response;

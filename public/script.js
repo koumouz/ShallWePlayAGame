@@ -79,7 +79,11 @@ async function processCommand(command) {
     }
 
     disableUserInput();
-    inputElement.value = 'Thinking...';
+    if(command.includes("Start Game:")) {       // Clean up this special case later...
+        inputElement.value = '';                // This is here because we already have
+    } else {                                    // a loader when starting a new game
+        inputElement.value = 'Thinking...';  
+    }
 
     if (command.length > 50) {
         return;
@@ -110,12 +114,12 @@ async function processCommand(command) {
     turnCountTextElement.textContent = "Turn: " + turnCount;
 }
 
-async function generateNextTurn(prompt) {
+async function generateNextTurn(command) {
     let response = null;
 
-    if(prompt.includes("Start Game:")) {
+    if(command.includes("Start Game:")) {
         let body = JSON.stringify({
-            gameScenario: prompt.split(':')[1],
+            gameScenario: command.split(':')[1],
         });
         
         response = await makeRequest('/api/startGame', body);
@@ -123,7 +127,7 @@ async function generateNextTurn(prompt) {
     } else {
         let body = JSON.stringify({
             gameKey: gameKey,
-            prompt: prompt
+            prompt: command
         });
         response = await makeRequest('/api/generateNextTurn', body);
     }
