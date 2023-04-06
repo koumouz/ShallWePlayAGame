@@ -26,10 +26,10 @@ async function showGameSelector() {
 
     for(let i = 0; i < availableGames.length; i++) {
         if(availableGames[i].includes('.txt')) {
-            gameSelectString += i + ": " + availableGames[i] + "\n";
+            gameSelectString += (i + 1) + ": " + availableGames[i] + "\n";
         }
     }
-    gameSelectString += "\n\nSelect [1 - " + (availableGames.length - 1)+ "]:";
+    gameSelectString += "\n\nSelect [1 - " + availableGames.length + "]:";
     updateOutputText(null, gameSelectString);
 
     // Make the input-line visible
@@ -49,8 +49,8 @@ async function showGameSelector() {
 }
 
 function selectGame(gameScenarioIndex) {
-    gameTitleTextElement.textContent = formatTitle(availableGames[gameScenarioIndex]);
-    startGame(availableGames[gameScenarioIndex]);
+    gameTitleTextElement.textContent = formatTitle(availableGames[gameScenarioIndex - 1]);
+    startGame(availableGames[gameScenarioIndex - 1]);
 }
 
 async function startGame(gameScenario) { 

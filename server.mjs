@@ -74,7 +74,8 @@ app.post('/api/getAvailableGames', async (req, res) => {
     try {
         // Read the game prompts directory and return an array of strings for the available games to play
         const response = {};
-        response.games = await fs.readdir(promptFilePath + 'games/');
+        const allFiles = await fs.readdir(promptFilePath + 'games/');
+        response.games = allFiles.filter(file => !file.startsWith('.'));
         res.send({ response });
     } catch (error) {
         console.error('Error returning game direcrory', error);
