@@ -73,10 +73,10 @@ async function startGame(gameScenario) {
 async function processCommand(command) {
     if(!gameInSession) {    // Yes, this is a little ugly. Hack the processCommand to treat game selection as a special case. I'll clean this up later.
         const number = parseInt(command, 10);
-        if(Number.isInteger(number) && number >= 1 && number < availableGames.length) {
+        if(Number.isInteger(number) && number >= 1 && number <= availableGames.length) {
             selectGame(number);
         } else if(number == availableGames.length + 1) {
-            updateOutputText('', "I'm sorry Professor, that game is no longer available. How about another game?");
+            updateOutputText('', "I'm sorry Professor, that game is no longer available. How about a different game?\n\nPlease enter a value [1 - "+ (availableGames.length + 1)+ "]");
         } else {
             updateOutputText('', "Please enter a value [1 - "+ (availableGames.length + 1)+ "]");
         }
