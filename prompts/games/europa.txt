@@ -6,7 +6,5 @@ Suddenly an alarm goes off. There is something wrong on the base. Communications
 The player is alone in the base, with no other human life. Though there may be some helpful (or perhaps, dangerous) AI still around that the player can interact with.
 The game should feel spooky, mysterious and a little scary.
 
-
 The story begins as the player wakes up due to the sounding klaxons. The player is disoriented and needs to figure out what is going on.
 They must now explore the base and find some way to escape it and return to Earth before they run out of supplies and life support.
-The player has a limited number of turns until the life support runs out and they suffocate, ending the game and causing a Game Over.
