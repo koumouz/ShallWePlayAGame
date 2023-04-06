@@ -154,7 +154,10 @@ app.listen(port, () => {
 
 /* Methods */
 async function startGame(gameScenario) {
+    console.log("Starting New Game");
     await connectRedisClient();
+
+    turnCount = null;
 
     if(gameScenario == null)
         gameScenario = defaultGameScenario;
@@ -228,7 +231,7 @@ async function generateNextTurn(gameKey, prompt) {
         }
     }
 
-    // If there was no gameKey, make one as it's a new game
+    // If there was no gameKey, make one as it's a new game 
     if(gameKey == null) {
         // The gameKey is based on the first 50 characters of the rendered game scenario
         gameKey = generateGameKey(textData.choices[0].message.content.substring(0, 50));
@@ -366,7 +369,6 @@ async function loadPromptFromFile(filePath) {
 }
 
 async function connectRedisClient() {
-    console.log("Connecting to Redis...");
     redisClient.connect().catch(error => {});
 
     redisClient.on('connect', function() {
