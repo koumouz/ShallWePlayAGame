@@ -52,7 +52,7 @@ let gameScenarioPrompt = null;
 const createImagePrompt = "\n\nFinally, create a prompt for DALL-E to create an image of the scene you just described. Keep the prompt as short and concise as possible. This should always be the last sentence of your response and it should begin with IMAGE_PROMPT:";
 
 // Style prompt for the image, this is appended to all image prompts
-const imageStyle = ", black and white only, no color, monochrome, in the style of an adventure game from the 1980s as pixel art, there must be no watermarks, logos, or text in the image."
+const imageStyle = ", no watermarks or text in the image, black and white only, in the style of an adventure game from the 1980s as pixel art."
 const gameOverString = "You have reached the end of this game session. For now, games are limited to " + maxTurns + " turns but we'll be expanding on this in the future. Thanks for playing!"
 /* End Constants and Globals */
 
