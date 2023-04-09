@@ -1,0 +1,14 @@
+Game Setting:
+The player is in an underground cave, with mold on many of the walls. It is dark.
+
+Game Tone:
+This mystery game should evoke a sense of unease, with a spooky, enigmatic atmosphere. The narative should be in the style of the Theater of the Absurb, like Waiting for Godot.
+
+As the player explores deeper into the cave they may run into a few Important Characters:
+Conway - a delivery man.
+Junebug - a singer and musician.
+Joseph - a gas station attendant.
+Donald - the computer programmer who made the game.
+Lula - a mysterious woman who is incredibly important to the meaning of the game.
+
+The adventure begins as the player enters the cave through a deep mysterious hole in the ground.
