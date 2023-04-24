@@ -144,6 +144,10 @@ body, html {
     display: none;
 }
 
+#enter-button {
+    margin-top:15px;
+}
+
 .footer {
     position: absolute;
     bottom: 0;

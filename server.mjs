@@ -57,19 +57,6 @@ const gameOverString = "You have reached the end of this game session. For now, 
 /* End Constants and Globals */
 
 /* Routes */
-app.post('/api/authenticate', (req, res) => {
-    // Hardcoded credentials
-    const username = process.env.USERNAME;
-    const password = process.env.PASSWORD;
-
-    if (req.body.username === username && req.body.password === password) {
-        req.session.authenticated = true;
-        res.json({ success: true });
-    } else {
-        res.json({ success: false });
-    }
-});
-
 app.post('/api/getAvailableGames', async (req, res) => {
     try {
         // Read the game prompts directory and return an array of strings for the available games to play
@@ -125,15 +112,6 @@ app.post('/api/generateImage', async (req, res) => {
     }
 });
 /* End Routes */
-
-// Middleware to protect game.html
-app.use('/game.html', (req, res, next) => {
-    if (req.session.authenticated) {
-        next();
-    } else {
-        res.redirect('/');
-    }
-});
 
 // Serve files from the public folder
 app.use(express.static(__dirname + '/public')); 

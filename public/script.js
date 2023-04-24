@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         showGameSelector();
     } else if (document.getElementById('intro-text')) {
         // Display out quick intro and splash screen
-        typeText(document.getElementById('intro-text'), introText, 0, 50, showLoginForm);
+        typeText(document.getElementById('intro-text'), introText, 0, 50, showEnterButton);
     }
 });
 
@@ -296,43 +296,14 @@ function hideLoader() {
     document.getElementById('loader').className = "hidden";
 }
 
-function showLoginForm() {
-    const loginForm = document.getElementById('login-form');
-    loginForm.classList.remove('hidden');
-    loginForm.classList.add('visible');
-    loginForm.addEventListener('submit', handleLoginFormSubmit);
+function showEnterButton() {
+    const enterButton = document.getElementById('enter-button');
+    enterButton.classList.remove('hidden');
+    enterButton.classList.add('visible');
+    enterButton.addEventListener('click', handleEnterButtonClick);
 }
 
-async function handleLoginFormSubmit(event) {
-    event.preventDefault();
-
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-
-    const response = await validateCredentials(username, password);
-
-    if (response.success) {
-        window.location.href = 'game.html';
-    } else {
-        document.getElementById('username').value = '';
-        document.getElementById('password').value = '';
-    }
-}
-
-async function validateCredentials(username, password) {
-    const body = JSON.stringify({ username, password });
-
-    try {
-        const response = await fetch('/api/authenticate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: body,
-        });
-        const data = await response.json();
-
-        return data;
-    } catch (error) {
-        console.error('Error validating credentials:', error);
-        return { success: false };
-    }
+async function handleEnterButtonClick() {
+    // Redirect the user to the game.html page
+    window.location.href = 'game.html';
 }
