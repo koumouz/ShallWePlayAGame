@@ -35,11 +35,11 @@ const textAPIURL = 'https://api.openai.com/v1/chat/completions';
 const imageAPIURL = 'https://api.openai.com/v1/images/generations';
 
 /* Constants and Globals */
-const maxTurns = 10;                 //default: 10
+const maxTurns = 10;                //default: 10
 const createImages = true;          //default: true
 const numMaxTokens = 1000;          //default: 1000
 const temperature = .5;             //default: 0.5
-const model = 'gpt-3.5-turbo';      //default: gpt-3.5-turbo
+const model = 'gpt-4';              //default: gpt-3.5-turbo
 const defaultGameScenario = 'the_island';
 
 // Game Rules
