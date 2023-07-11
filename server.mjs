@@ -168,7 +168,6 @@ async function generateNextTurn(gameKey, prompt) {
         gameTurnHistory = await loadGameProgress(gameKey);  // Get the history of game turns to date. We need to send the complete history to the API to maintain state
         prompt = sanitize(prompt); // Do a quick (and crude) check to make sure there are no security issues in the prompt
         let formattedPrompt = {"role": "user", "content": prompt} // Format the command so we can send to the model API
-        gameTurnHistory.push({"role": "system", "content": systemRulesPrompt})   // Now add in the system prompt
         gameTurnHistory.push(formattedPrompt); // Finally add the new command
     }
 
@@ -227,7 +226,6 @@ async function generateNextTurn(gameKey, prompt) {
     response.imagePrompt = substrs[1];
 
     // update the game state file. Remove the system prompt and add the most recent assistant response
-    gameTurnHistory.splice(gameTurnHistory.length - 2, 1);
     gameTurnHistory.push({"role": "assistant", "content": textData.choices[0].message.content});
     await saveGameProgress(gameKey, gameTurnHistory);
 
