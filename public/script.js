@@ -11,6 +11,21 @@ let gameInSession = false;
 let availableGames = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
+    const isMobile = /Mobile/.test(navigator.userAgent);
+    if (isMobile) {
+        if (window.location.pathname !== '/index.html') {
+            window.location.replace('/index.html');
+        } else {
+            document.getElementById('footer-text').className = "hidden";
+            document.getElementById('terminal').style.width = "80%";
+
+            let desktopBrowserText = "I'm sorry Professor Falken, but mobile browsers are not supported."
+            typeText(document.getElementById('intro-text'), desktopBrowserText, 0, 50);
+        }
+        return;
+    }// Check to see if this is a mobile browser and if so, ask the user to use a desktop browser
+
+
     if (document.getElementById('game-container')) { 
         showGameSelector();
     } else if (document.getElementById('intro-text')) {
