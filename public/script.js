@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('footer-text').className = "hidden";
             document.getElementById('terminal').style.width = "80%";
 
-            let desktopBrowserText = "I'm sorry Professor Falken, but mobile browsers are not supported."
+            let desktopBrowserText = "I'm sorry, mobile browsers are not supported."
             typeText(document.getElementById('intro-text'), desktopBrowserText, 0, 50);
         }
         return;
