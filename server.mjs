@@ -35,11 +35,11 @@ const TEXT_API_URI = "https://api.openai.com/v1/chat/completions";
 const IMAGE_API_URI = "https://api.openai.com/v1/images/generations";
 
 /* Constants and Globals */
-const maxTurns = 10; //default: 10
+const maxTurns = 20;
 const createImages = true; //default: true
 const numMaxTokens = 1000; //default: 1000
 const temperature = 0.5; //default: 0.5
-const model = "gpt-4"; //default: gpt-3.5-turbo
+const model = "gpt-4";
 const defaultGameScenario = "the_island";
 
 // Game Rules
@@ -54,7 +54,7 @@ const createImagePrompt =
 
 // Style prompt for the image, this is appended to all image prompts
 const imageStyle =
-	", no watermarks or text in the image, black and white only, in the style of an adventure game from the 1980s as pixel art.";
+	", no watermarks or text in the image, no colors, monochrome, black and white, in the style of an adventure game from the 1980s as pixel art.";
 const gameOverString =
 	"You have reached the end of this game session. For now, games are limited to " +
 	maxTurns +
