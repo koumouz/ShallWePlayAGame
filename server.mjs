@@ -311,7 +311,7 @@ function generateGameOverReponse(gameKey, reason) {
 			break;
 		default:
 			response.text =
-				"Hmm. Something went wrong and we're not quite sure what it is. Check back soon, maybe it's fixed. Or maybe it's not. Welcome to our probalistic future :)";
+				"ERROR: Something went wrong and you have encounted some weird and unknown bug. Check back soon, maybe it's fixed. Or maybe it's not. Welcome to our probabilistic future.";
 			break;
 	}
 
