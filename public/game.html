@@ -1,46 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shall We Play a Game?</title>
-    <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
-</head>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-Y2HN99JKRQ"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Shall We Play a Game?</title>
+		<link rel="stylesheet" href="styles.css" />
+		<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet" />
+	</head>
+	<!-- Google tag (gtag.js) -->
+	<script async src="https://www.googletagmanager.com/gtag/js?id=G-Y2HN99JKRQ"></script>
+	<script>
+		window.dataLayer = window.dataLayer || [];
+		function gtag() {
+			dataLayer.push(arguments);
+		}
+		gtag("js", new Date());
 
-  gtag('config', 'G-Y2HN99JKRQ');
-</script>
-<body>
-    <div id="game-container">
-        <div id="title-bar">
-            <span id="game-title-text" class="title-text"></span>
-            <span id="turn-count-text" class="title-text"></span>
-        </div>
-        <div id="content">
-            <div id="terminal">
-                <div id="loader"></div>
-                <div id="output"></div>
-                <div id="input-line" class="hidden">
-                    ><input class="input" id="input" maxlength="50" autocomplete="off" autofocus />
-                </div>
-            </div>
-            <div id="image-container">
-                <img id="game-image" src="images/smol.png" alt="">
-            </div>
-        </div>
-    </div>
-    <div id="footer-text" class="footer">"Shall We Play a Game?" is a prototype in generative interactive fiction
-        using <a href="https://en.wikipedia.org/wiki/Large_language_model" target="_blank">large language</a>
-        and <a href="https://en.wikipedia.org/wiki/Diffusion_model" target="_blank">image diffusion models</a>. All the
-        content the player interacts with is generated in real time, creating a unique playthrough for each session.  The interface and
-        gameplay was inspired by the interactive fiction games of the 1980s, which <a href="https://www.threads.net/@koumouz" target="_blank">I
-        grew up playing</a> on <a href="https://en.wikipedia.org/wiki/Monochrome_monitor" target="_blank">amber CRTs</a> :)</div>
-    <script src="script.js"></script>
-</body>
+		gtag("config", "G-Y2HN99JKRQ");
+	</script>
+	<body>
+		<div id="game-container">
+			<div id="title-bar">
+				<span id="game-title-text" class="title-text"></span>
+				<span id="turn-count-text" class="title-text"></span>
+			</div>
+			<div id="content">
+				<div id="terminal">
+					<div id="loader"></div>
+					<div id="output"></div>
+					<div id="input-line" class="hidden">
+						><input class="input" id="input" maxlength="50" autocomplete="off" autofocus />
+					</div>
+				</div>
+				<div id="image-container">
+					<img id="game-image" src="images/smol.png" alt="" />
+				</div>
+			</div>
+		</div>
+		<div id="footer-text" class="footer">
+			"Shall We Play a Game?" is a prototype in generative interactive fiction using
+			<a href="https://en.wikipedia.org/wiki/Large_language_model" target="_blank">large language</a> and
+			<a href="https://en.wikipedia.org/wiki/Diffusion_model" target="_blank">image diffusion models</a>. The
+			content the player interacts with is generated in real time, creating a unique playthrough for each session.
+			The interface and gameplay was inspired by the interactive fiction games of the 1980s, which
+			<a href="https://www.threads.net/@koumouz" target="_blank">I grew up playing</a> on
+			<a href="https://en.wikipedia.org/wiki/Monochrome_monitor" target="_blank">amber CRTs</a> :)
+		</div>
+		<script src="script.js"></script>
+	</body>
 </html>
