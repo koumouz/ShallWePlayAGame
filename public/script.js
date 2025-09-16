@@ -18,6 +18,7 @@ let gameKey = null;
 let turnCount = 0;
 let gameInSession = false;
 let availableGames = [];
+let imageLoaderState = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
 	const isMobile = /Mobile/.test(navigator.userAgent);
@@ -356,6 +357,7 @@ async function generateImage(prompt) {
 
 function displayImageLoader() {
 	const imageElement = document.getElementById("game-image");
+	hideImageLoader({ skipFade: true });
 	imageElement.style.opacity = 0;
 
 	const canvasElement = document.createElement("canvas");
@@ -365,40 +367,77 @@ function displayImageLoader() {
 	document.getElementById("image-container").appendChild(canvasElement);
 
 	const ctx = canvasElement.getContext("2d");
-
 	const lineWidth = 4;
 	const linesPerColumn = canvasElement.height / lineWidth;
-	const fps = 5;
-	const fpsInterval = 1000 / fps;
-	let lastDrawTime = 0;
-	let currentLine = 0;
+	const fpsInterval = 1000 / 5;
+
+	const state = {
+		canvasElement,
+		ctx,
+		lineWidth,
+		linesPerColumn,
+		fpsInterval,
+		lastDrawTime: 0,
+		currentLine: 0,
+		cancelled: false,
+		rafId: null,
+		fadeInterval: null,
+	};
+
+	imageLoaderState = state;
 
 	function drawLine(timestamp) {
-		if (!lastDrawTime) {
-			lastDrawTime = timestamp;
+		if (state.cancelled) {
+			return;
 		}
 
-		if (timestamp - lastDrawTime >= fpsInterval) {
-			const y = currentLine * lineWidth;
+		if (!state.lastDrawTime) {
+			state.lastDrawTime = timestamp;
+	}
 
-			ctx.fillStyle = "#ffa500";
-			ctx.fillRect(0, y, canvasElement.width, lineWidth);
-
-			currentLine++;
-			lastDrawTime = timestamp;
+		if (timestamp - state.lastDrawTime >= state.fpsInterval) {
+			const y = state.currentLine * state.lineWidth;
+			state.ctx.fillStyle = "#ffa500";
+			state.ctx.fillRect(0, y, state.canvasElement.width, state.lineWidth);
+			state.currentLine++;
+			state.lastDrawTime = timestamp;
 		}
 
-		if (currentLine < linesPerColumn) {
-			requestAnimationFrame(drawLine);
+		if (state.currentLine < state.linesPerColumn) {
+			state.rafId = requestAnimationFrame(drawLine);
 		}
 	}
 
-	requestAnimationFrame(drawLine);
+	state.rafId = requestAnimationFrame(drawLine);
 }
 
-function hideImageLoader() {
+function hideImageLoader(options = {}) {
 	const imageElement = document.getElementById("game-image");
 	const canvasElement = document.getElementById("loading-canvas");
+	const skipFade = Boolean(options.skipFade);
+
+	if (imageLoaderState) {
+		imageLoaderState.cancelled = true;
+		if (imageLoaderState.rafId) {
+			cancelAnimationFrame(imageLoaderState.rafId);
+		}
+		if (imageLoaderState.fadeInterval) {
+			clearInterval(imageLoaderState.fadeInterval);
+		}
+	}
+
+	if (!canvasElement) {
+		imageElement.style.opacity = 1;
+		imageLoaderState = null;
+		return;
+	}
+
+	if (skipFade) {
+		canvasElement.remove();
+		imageElement.style.opacity = 1;
+		imageLoaderState = null;
+		return;
+	}
 
 	imageElement.style.opacity = 0;
 
@@ -414,8 +453,13 @@ function hideImageLoader() {
 		} else {
 			clearInterval(fadeEffect);
 			canvasElement.remove();
+			imageLoaderState = null;
 		}
 	}, interval);
+
+	if (imageLoaderState) {
+		imageLoaderState.fadeInterval = fadeEffect;
+	}
 }
 
 function endGameSession() {
