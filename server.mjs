@@ -1,6 +1,6 @@
 import express from "express";
 import { fileURLToPath } from "url";
-import { dirname } from "path";
+import { dirname, join } from "path";
 import fetch from "node-fetch";
 import fs from "fs/promises";
 import session from "express-session";
@@ -17,57 +17,42 @@ if (process.env.NODE_ENV !== "production") {
 // Initialize things
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const config = buildConfig();
 const app = express();
-const port = process.env.PORT || 3000;
-
-const databaseConfig = {};
-
-if (process.env.DATABASE_URL) {
-	databaseConfig.connectionString = process.env.DATABASE_URL;
-}
-
-const sslFlag = (process.env.DATABASE_SSL || "").toLowerCase();
-const shouldUseSSL = sslFlag ? sslFlag === "true" || sslFlag === "1" : process.env.NODE_ENV === "production";
-
-if (shouldUseSSL) {
-	databaseConfig.ssl = { rejectUnauthorized: false };
-}
-
-const pool = new Pool(databaseConfig);
-
-let dbInitialized = false;
+const pool = new Pool(config.database);
+let dbInitializationPromise = null;
 
 app.use(express.json({ limit: "50mb" }));
-app.use(
-	session({
-		secret: process.env.SESSION_SECRET,
-		resave: false,
-		saveUninitialized: true,
-		cookie: { secure: false },
-	})
-);
+app.use(session(config.session));
 
 /* OpenAI API Endpoints */
-const OPENAI_API_KEY = process.env.API_KEY;
 const TEXT_API_URI = "https://api.openai.com/v1/responses";
 const IMAGE_API_URI = "https://api.openai.com/v1/images/generations";
 
 /* Constants and Globals */
-const maxTurns = 35;
-const createImages = true; //default: true
-const numMaxTokens = 1000; //default: 1000
-const temperature = 0.5; //default: 0.5
-const textModel = process.env.TEXT_MODEL || "gpt-4o";
-const IMAGE_MODEL = process.env.IMAGE_MODEL || "dall-e-3";
-const IMAGE_SIZE = process.env.IMAGE_SIZE || "1024x1024";
-const IMAGE_QUALITY = process.env.IMAGE_QUALITY || (IMAGE_MODEL === "gpt-image-1" ? "high" : "standard");
-const defaultGameScenario = "the_island";
+const {
+	openAI: {
+		apiKey: OPENAI_API_KEY,
+		textModel,
+		imageModel: IMAGE_MODEL,
+		imageSize: IMAGE_SIZE,
+		imageQuality: IMAGE_QUALITY,
+	},
+	game: {
+		maxTurns,
+		createImages,
+		maxOutputTokens: numMaxTokens,
+		temperature,
+		defaultScenario: defaultGameScenario,
+	},
+	prompts,
+} = config;
 
 // Game Rules
-const promptFilePath = "prompts/";
-const systemPromptPath = "system/interactive_fiction";
-let systemRulesPrompt = null;
-let gameScenarioPrompt = null;
+const promptPaths = {
+	systemRules: prompts.systemRules,
+	gamesDir: prompts.gamesDir,
+};
 
 // Prompt to tell the model to also generate an image prompt
 const createImagePrompt =
@@ -80,94 +65,99 @@ const gameOverString =
 	"You have reached the end of this game session. For now, games are limited to " +
 	maxTurns +
 	" turns but we'll be expanding on this in the future. Thanks for playing!";
+const CREATE_GAME_SESSIONS_TABLE_QUERY = `
+	CREATE TABLE IF NOT EXISTS game_sessions (
+		game_key TEXT PRIMARY KEY,
+		game_history JSONB NOT NULL,
+		turn_count INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+`;
 /* End Constants and Globals */
 
 async function ensureDbInitialized() {
-	if (dbInitialized) {
-		return;
+	if (!dbInitializationPromise) {
+		dbInitializationPromise = pool
+			.query(CREATE_GAME_SESSIONS_TABLE_QUERY)
+			.catch((error) => {
+				dbInitializationPromise = null;
+				console.error("Error initializing Postgres:", error);
+				throw error;
+			});
 	}
 
-	const createTableQuery = `
-		CREATE TABLE IF NOT EXISTS game_sessions (
-			game_key TEXT PRIMARY KEY,
-			game_history JSONB NOT NULL,
-			turn_count INTEGER NOT NULL DEFAULT 0,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-	`;
-
-	try {
-		await pool.query(createTableQuery);
-		dbInitialized = true;
-	} catch (error) {
-		console.error("Error initializing Postgres:", error);
-		throw error;
-	}
+	return dbInitializationPromise;
 }
 
 /* Routes */
-app.post("/api/getAvailableGames", async (req, res) => {
-	try {
-		// Read the game prompts directory and return an array of strings for the available games to play
-		const response = {};
-		const allFiles = await fs.readdir(promptFilePath + "games/");
-		response.games = allFiles.filter((file) => !file.startsWith("."));
-		res.send({ response });
-	} catch (error) {
-		console.error("Error returning game direcrory", error);
-		res.status(500).send({ error: "An error occurred while processing your request." });
-	}
-});
-
-app.post("/api/generateNextTurn", async (req, res) => {
-	res.setHeader("Content-Type", "text/event-stream");
-	res.setHeader("Cache-Control", "no-cache, no-transform");
-	res.setHeader("Connection", "keep-alive");
-
-	if (typeof res.flushHeaders === "function") {
-		res.flushHeaders();
-	}
-
-	try {
-		const finalPayload = await streamGameTurn(req.body, res);
-		res.write(`data: ${JSON.stringify({ type: "complete", data: finalPayload })}\n\n`);
-		res.write("data: [DONE]\n\n");
-		res.end();
-	} catch (error) {
-		console.error("Error generating a new turn:", error);
-		const message = error?.message || "An error occurred while processing your request.";
-		res.write(`data: ${JSON.stringify({ type: "error", message: message })}\n\n`);
-		res.write("data: [DONE]\n\n");
-		res.end();
-	}
-});
-
-app.post("/api/generateImage", async (req, res) => {
-	const prompt = req.body.prompt;
-
-	if (createImages) {
-		try {
-			const imagePayload = await generateImage(prompt);
-			res.type("image/png");
-			res.set("X-Image-Alt-Text", convertToASCII(imagePayload.imageAltText));
-			res.send(imagePayload.image);
-		} catch (error) {
-			console.error("Error generating image:", error);
-			res.status(500).send({ error: "An error occurred while generating the image." });
-		}
-	}
-});
+app.post("/api/getAvailableGames", handleGetAvailableGames);
+app.post("/api/generateNextTurn", handleGenerateNextTurn);
+app.post("/api/generateImage", handleGenerateImage);
 /* End Routes */
 
 // Serve files from the public folder
-app.use(express.static(__dirname + "/public"));
+app.use(express.static(join(__dirname, "public")));
+
+async function handleGetAvailableGames(req, res) {
+	try {
+		const allFiles = await fs.readdir(promptPaths.gamesDir);
+		const games = allFiles.filter((file) => !file.startsWith("."));
+		res.json({ response: { games } });
+	} catch (error) {
+		console.error("Error returning game directory", error);
+		res.status(500).json({ error: "An error occurred while processing your request." });
+	}
+}
+
+async function handleGenerateNextTurn(req, res) {
+	initializeSSE(res);
+
+	try {
+		const finalPayload = await streamGameTurn(req.body, res);
+		sendSSE(res, { type: "complete", data: finalPayload });
+	} catch (error) {
+		console.error("Error generating a new turn:", error);
+		const message = error?.message || "An error occurred while processing your request.";
+		sendSSE(res, { type: "error", message });
+	} finally {
+		closeSSE(res);
+	}
+}
+
+async function handleGenerateImage(req, res) {
+	if (!createImages) {
+		res.status(503).json({ error: "Image generation is currently disabled." });
+		return;
+	}
+
+	const prompt = req.body?.prompt;
+
+	if (!prompt || typeof prompt !== "string") {
+		res.status(400).json({ error: "An image prompt is required." });
+		return;
+	}
+
+	try {
+		const imagePayload = await generateImage(prompt);
+		if (!imagePayload) {
+			res.status(400).json({ error: "Unable to generate image for the provided prompt." });
+			return;
+		}
+		res.type("image/png");
+		res.set("X-Image-Alt-Text", convertToASCII(imagePayload.imageAltText));
+		res.send(imagePayload.image);
+	} catch (error) {
+		console.error("Error generating image:", error);
+		res.status(500).json({ error: "An error occurred while generating the image." });
+	}
+}
 
 async function startServer() {
 	try {
 		await ensureDbInitialized();
-		app.listen(port, () => {
-			console.log(`Server is running on port ${port}`);
+		app.listen(config.port, () => {
+			console.log(`Server is running on port ${config.port}`);
 		});
 	} catch (error) {
 		console.error("Failed to initialize the database:", error);
@@ -177,22 +167,100 @@ async function startServer() {
 
 startServer();
 
+function initializeSSE(res) {
+	res.setHeader("Content-Type", "text/event-stream");
+	res.setHeader("Cache-Control", "no-cache, no-transform");
+	res.setHeader("Connection", "keep-alive");
+
+	if (typeof res.flushHeaders === "function") {
+		res.flushHeaders();
+	}
+}
+
+function sendSSE(res, payload) {
+	res.write(`data: ${JSON.stringify(payload)}\n\n`);
+	if (typeof res.flush === "function") {
+		res.flush();
+	}
+}
+
+function closeSSE(res) {
+	res.write("data: [DONE]\n\n");
+	res.end();
+}
+
+function buildConfig() {
+	const env = process.env.NODE_ENV || "development";
+	const port = parseInteger(process.env.PORT, 3000);
+	const apiKey = process.env.API_KEY;
+
+	if (!apiKey) {
+		throw new Error("API_KEY environment variable is required to start the server");
+	}
+
+	const imageModel = process.env.IMAGE_MODEL || "dall-e-3";
+	const imageQuality = process.env.IMAGE_QUALITY || (imageModel === "gpt-image-1" ? "high" : "standard");
+
+	const database = {};
+	if (process.env.DATABASE_URL) {
+		database.connectionString = process.env.DATABASE_URL;
+	}
+
+	const sslFlag = (process.env.DATABASE_SSL || "").toLowerCase();
+	const shouldUseSSL = sslFlag ? sslFlag === "true" || sslFlag === "1" : env === "production";
+	if (shouldUseSSL) {
+		database.ssl = { rejectUnauthorized: false };
+	}
+
+	const promptsRoot = join(__dirname, "prompts");
+
+	return {
+		env,
+		port,
+		database,
+		session: {
+			secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex"),
+			resave: false,
+			saveUninitialized: true,
+			cookie: { secure: env === "production" },
+		},
+		openAI: {
+			apiKey,
+			textModel: process.env.TEXT_MODEL || "gpt-4o",
+			imageModel,
+			imageSize: process.env.IMAGE_SIZE || "1024x1024",
+			imageQuality,
+		},
+		game: {
+			maxTurns: parseInteger(process.env.MAX_TURNS, 35),
+			createImages: parseBoolean(process.env.CREATE_IMAGES, true),
+			maxOutputTokens: parseInteger(process.env.MAX_OUTPUT_TOKENS, 1000),
+			temperature: parseNumber(process.env.TEMPERATURE, 0.5),
+			defaultScenario: process.env.DEFAULT_SCENARIO || "the_island",
+		},
+		prompts: {
+			root: promptsRoot,
+			gamesDir: join(promptsRoot, "games"),
+			systemRules: join(promptsRoot, "system", "interactive_fiction.txt"),
+		},
+	};
+}
+
 /* Methods */
 async function streamGameTurn(requestBody, res) {
 	await ensureDbInitialized();
 
-	let { gameKey, prompt, gameScenario } = requestBody || {};
-	let gameTurnHistory = [];
+	const { gameKey: incomingGameKey, prompt, gameScenario } = requestBody || {};
+	let gameKey = incomingGameKey;
+	const gameTurnHistory = [];
 	let currentTurnCount = 0;
-	const isExistingGame = Boolean(gameKey);
 
-	if (!isExistingGame) {
-		if (gameScenario == null) {
-			gameScenario = defaultGameScenario;
-		}
-
-		systemRulesPrompt = await loadPromptFromFile(promptFilePath + systemPromptPath + ".txt");
-		gameScenarioPrompt = await loadPromptFromFile(promptFilePath + "games/" + gameScenario);
+	if (!incomingGameKey) {
+		const scenarioFile = resolveScenarioFilename(gameScenario ?? defaultGameScenario);
+		const [systemRulesPrompt, gameScenarioPrompt] = await Promise.all([
+			loadPromptFromFile(promptPaths.systemRules),
+			loadPromptFromFile(join(promptPaths.gamesDir, scenarioFile)),
+		]);
 
 		gameTurnHistory.push({ role: "system", content: systemRulesPrompt });
 		gameTurnHistory.push({ role: "user", content: gameScenarioPrompt });
@@ -201,24 +269,21 @@ async function streamGameTurn(requestBody, res) {
 
 		if (!storedSession || !Array.isArray(storedSession.gameHistory)) {
 			console.error("Game session not found for key", gameKey);
-			return generateGameOverReponse(gameKey, "sessionNotFound", currentTurnCount);
+			return generateGameOverResponse(gameKey, "sessionNotFound", currentTurnCount);
 		}
 
-		gameTurnHistory = storedSession.gameHistory;
+		gameTurnHistory.push(...storedSession.gameHistory);
 		currentTurnCount = storedSession.turnCount || 0;
 
 		if (currentTurnCount >= maxTurns) {
-			return generateGameOverReponse(gameKey, "turnLimitExceeded", currentTurnCount);
+			return generateGameOverResponse(gameKey, "turnLimitExceeded", currentTurnCount);
 		}
 
 		const sanitizedPrompt = sanitize(typeof prompt === "string" ? prompt : "");
-		const formattedPrompt = { role: "user", content: sanitizedPrompt };
-		gameTurnHistory.push(formattedPrompt);
+		gameTurnHistory.push({ role: "user", content: sanitizedPrompt });
 	}
 
-	if (createImages && gameTurnHistory.length > 0) {
-		gameTurnHistory[gameTurnHistory.length - 1].content += ". " + createImagePrompt;
-	}
+	appendImageInstruction(gameTurnHistory);
 
 	const headers = {
 		"Content-Type": "application/json",
@@ -229,27 +294,55 @@ async function streamGameTurn(requestBody, res) {
 		model: textModel,
 		input: formatHistoryForResponses(gameTurnHistory),
 		max_output_tokens: numMaxTokens,
-		temperature: temperature,
+		temperature,
 		stream: true,
 	};
 
 	const textResponse = await fetch(TEXT_API_URI, {
 		method: "POST",
-		headers: headers,
+		headers,
 		body: JSON.stringify(requestPayload),
 	});
 
 	if (!textResponse.ok) {
 		if (textResponse.status === 429) {
 			console.error("Error: OpenAI API quota exceeded");
-			return generateGameOverReponse(gameKey, "APIQuotaExceeded", currentTurnCount);
+			return generateGameOverResponse(gameKey, "APIQuotaExceeded", currentTurnCount);
 		}
 
 		const errorPayload = await textResponse.text();
 		throw new Error(`OpenAI API error: ${errorPayload}`);
 	}
 
-	if (!textResponse.body) {
+	const aggregatedText = await streamOpenAIResponse(textResponse, (deltaText) => {
+		if (deltaText) {
+			sendSSE(res, { type: "delta", text: deltaText });
+		}
+	});
+
+	if (!incomingGameKey) {
+		gameKey = generateGameKey(aggregatedText.substring(0, 50));
+		currentTurnCount = 1;
+	} else {
+		currentTurnCount++;
+	}
+
+	const trimmedResponse = aggregatedText.trim();
+	gameTurnHistory.push({ role: "assistant", content: trimmedResponse });
+	await saveGameProgress(gameKey, gameTurnHistory, currentTurnCount);
+
+	const { textResponseBody, imagePrompt: extractedImagePrompt } = extractImagePrompt(trimmedResponse);
+
+	return {
+		gameKey,
+		turnCount: currentTurnCount,
+		text: textResponseBody,
+		imagePrompt: extractedImagePrompt,
+	};
+}
+
+async function streamOpenAIResponse(response, onDelta) {
+	if (!response.body) {
 		throw new Error("OpenAI API returned an empty response body");
 	}
 
@@ -294,10 +387,13 @@ async function streamGameTurn(requestBody, res) {
 					case "response.output_text.delta": {
 						const deltaText = parsed.delta || "";
 						aggregatedText += deltaText;
-						res.write(`data: ${JSON.stringify({ type: "delta", text: deltaText })}\n\n`);
-						if (typeof res.flush === "function") {
-							res.flush();
+						if (typeof onDelta === "function") {
+							onDelta(deltaText);
 						}
+						break;
+					}
+					case "response.completed": {
+						streamClosed = true;
 						break;
 					}
 					case "response.error": {
@@ -310,8 +406,8 @@ async function streamGameTurn(requestBody, res) {
 		}
 	};
 
-	if (typeof textResponse.body?.getReader === "function") {
-		const reader = textResponse.body.getReader();
+	if (typeof response.body.getReader === "function") {
+		const reader = response.body.getReader();
 		while (!streamClosed) {
 			const { value, done } = await reader.read();
 			if (done) {
@@ -322,8 +418,8 @@ async function streamGameTurn(requestBody, res) {
 				processChunk(chunkText);
 			}
 		}
-	} else if (textResponse.body && typeof textResponse.body[Symbol.asyncIterator] === "function") {
-		for await (const chunk of textResponse.body) {
+	} else if (typeof response.body[Symbol.asyncIterator] === "function") {
+		for await (const chunk of response.body) {
 			const chunkText =
 				typeof chunk === "string"
 					? chunk
@@ -341,49 +437,62 @@ async function streamGameTurn(requestBody, res) {
 		throw new Error("OpenAI API returned a non-streaming body");
 	}
 
-	aggregatedText = aggregatedText.trim();
+	return aggregatedText.trim();
+}
 
-	if (!isExistingGame) {
-		gameKey = generateGameKey(aggregatedText.substring(0, 50));
-		currentTurnCount = 1;
-	} else {
-		currentTurnCount++;
+function appendImageInstruction(history) {
+	if (!createImages || history.length === 0) {
+		return;
 	}
 
-	gameTurnHistory.push({ role: "assistant", content: aggregatedText });
-	await saveGameProgress(gameKey, gameTurnHistory, currentTurnCount);
-
-	const substrs = aggregatedText.split("IMAGE_PROMPT");
-	const textResponseBody = substrs[0] ? substrs[0].trim() : aggregatedText;
-	let imagePrompt = null;
-	if (substrs.length > 1) {
-		imagePrompt = substrs[1].replace(/^[:\s]+/, "").trim();
+	const lastMessage = history[history.length - 1];
+	if (!lastMessage || typeof lastMessage.content !== "string") {
+		return;
 	}
 
-	return {
-		gameKey,
-		turnCount: currentTurnCount,
-		text: textResponseBody,
-		imagePrompt,
-	};
+	const trimmedTrailingWhitespace = lastMessage.content.replace(/\s+$/, "");
+	const needsTerminalPunctuation =
+		trimmedTrailingWhitespace !== "" && !/[.!?]$/.test(trimmedTrailingWhitespace);
+	const baseContent = needsTerminalPunctuation
+		? `${trimmedTrailingWhitespace}.`
+		: trimmedTrailingWhitespace;
+	lastMessage.content = `${baseContent}${createImagePrompt}`;
+}
+
+function resolveScenarioFilename(rawScenario) {
+	const scenario = typeof rawScenario === "string" && rawScenario.trim() ? rawScenario.trim() : defaultGameScenario;
+	return scenario.endsWith(".txt") ? scenario : `${scenario}.txt`;
+}
+
+function extractImagePrompt(responseText) {
+	const segments = responseText.split("IMAGE_PROMPT");
+	const textResponseBody = segments[0] ? segments[0].trim() : responseText;
+
+	if (segments.length <= 1) {
+		return { textResponseBody, imagePrompt: null };
+	}
+
+	const imagePrompt = segments.slice(1).join("IMAGE_PROMPT").replace(/^[:\s]+/, "").trim();
+	return { textResponseBody, imagePrompt: imagePrompt || null };
 }
 
 async function generateImage(prompt) {
-	if (!createImages || !prompt) {
+	if (!createImages) {
 		return null;
 	}
 
-	let imagePrompt = prompt;
-	const originalPrompt = imagePrompt;
-
-	if (imagePrompt.length > 0) {
-		imagePrompt = imagePrompt.slice(0, -1);
+	const trimmedPrompt = typeof prompt === "string" ? prompt.trim() : "";
+	if (!trimmedPrompt) {
+		return null;
 	}
 
-	imagePrompt += imageStyle;
+	const promptWithoutTrailingPunctuation = trimmedPrompt.replace(/[.!?]+$/u, "");
+	const combinedPrompt = `${promptWithoutTrailingPunctuation}${imageStyle}`.replace(/^[:\s]+/, "");
+	const sanitizedPrompt = sanitize(combinedPrompt);
 
-	imagePrompt = imagePrompt.replace(/^[:\s]+/, "");
-	imagePrompt = sanitize(imagePrompt);
+	if (!sanitizedPrompt) {
+		return null;
+	}
 
 	const headers = {
 		"Content-Type": "application/json",
@@ -392,7 +501,7 @@ async function generateImage(prompt) {
 
 	const requestPayload = {
 		model: IMAGE_MODEL,
-		prompt: imagePrompt,
+		prompt: sanitizedPrompt,
 		size: IMAGE_SIZE,
 	};
 
@@ -400,12 +509,10 @@ async function generateImage(prompt) {
 		requestPayload.quality = IMAGE_QUALITY;
 	}
 
-	const imageRequestBody = JSON.stringify(requestPayload);
-
 	const imageResponse = await fetch(IMAGE_API_URI, {
 		method: "POST",
-		headers: headers,
-		body: imageRequestBody,
+		headers,
+		body: JSON.stringify(requestPayload),
 	});
 
 	if (!imageResponse.ok) {
@@ -436,7 +543,7 @@ async function generateImage(prompt) {
 
 	return {
 		image: imageBuffer,
-		imageAltText: originalPrompt?.trim() || imagePrompt,
+		imageAltText: trimmedPrompt,
 	};
 }
 
@@ -462,7 +569,7 @@ function formatHistoryForResponses(history) {
 	});
 }
 
-function generateGameOverReponse(gameKey, reason, turnCount = 0) {
+function generateGameOverResponse(gameKey, reason, turnCount = 0) {
 	let response = {};
 	response.gameKey = gameKey;
 	response.turnCount = turnCount;
@@ -471,17 +578,17 @@ function generateGameOverReponse(gameKey, reason, turnCount = 0) {
 	switch (reason) {
 		case "turnLimitExceeded":
 			response.text = gameOverString;
-			break;
-		case "APIQuotaExceeded":
-			response.text =
-				"Do to the immense popularity of this game we have exceeded our capacity! Unfortunately it's game over for now, but we're working hard on recruiting more gnomes to power the AI machinery... Check back soon :)";
-			break;
-		case "sessionNotFound":
-			response.text = "We couldn't find that game session. Please start a new adventure to continue playing.";
-			break;
-		default:
-			response.text =
-				"ERROR: Something went wrong and you have encounted some weird and unknown bug. Check back soon, maybe it's fixed. Or maybe it's not. Welcome to our probabilistic future.";
+		break;
+	case "APIQuotaExceeded":
+		response.text =
+			"Due to the immense popularity of this game we have exceeded our capacity! Unfortunately it's game over for now, but we're working hard on recruiting more gnomes to power the AI machinery... Check back soon :)";
+		break;
+	case "sessionNotFound":
+		response.text = "We couldn't find that game session. Please start a new adventure to continue playing.";
+		break;
+	default:
+		response.text =
+			"ERROR: Something went wrong and you have encountered some weird and unknown bug. Check back soon, maybe it's fixed. Or maybe it's not. Welcome to our probabilistic future.";
 			break;
 	}
 
@@ -540,27 +647,62 @@ async function loadPromptFromFile(filePath) {
 		const content = await fs.readFile(filePath, "utf8");
 		return content;
 	} catch (error) {
+		console.error(`Failed to load prompt file at ${filePath}`, error);
 		throw error;
 	}
 }
 
 /* Helper Methods */
+function parseInteger(value, defaultValue) {
+	if (value == null) {
+		return defaultValue;
+	}
+
+	const parsed = Number.parseInt(value, 10);
+	return Number.isFinite(parsed) ? parsed : defaultValue;
+}
+
+function parseNumber(value, defaultValue) {
+	if (value == null) {
+		return defaultValue;
+	}
+
+	const parsed = Number.parseFloat(value);
+	return Number.isFinite(parsed) ? parsed : defaultValue;
+}
+
+function parseBoolean(value, defaultValue) {
+	if (value == null) {
+		return defaultValue;
+	}
+
+	return /^(true|1|yes|y)$/i.test(value);
+}
+
 // It does what it says on the tin
 function convertToASCII(str) {
+	if (typeof str !== "string") {
+		return "";
+	}
+
 	return str.replace(/[^\x00-\x7F]/g, "");
 }
 
 // Best (quick) effort at removing any potentially dangerous strings from user input
 function sanitize(str) {
+	if (typeof str !== "string") {
+		return "";
+	}
+
 	// Remove potential HTML elements
-	str = str.replace(/<[^>]*>/g, "");
+	let sanitized = str.replace(/<[^>]*>/g, "");
 
 	// Remove potential ECMAScript method calls
-	str = str.replace(/\./g, "");
+	sanitized = sanitized.replace(/\./g, "");
 
 	// Remove single quotes
-	str = str.replace(/'/g, "");
+	sanitized = sanitized.replace(/'/g, "");
 
-	return str;
+	return sanitized;
 }
 /* End Helper Methods */
