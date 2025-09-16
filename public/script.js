@@ -4,6 +4,15 @@ const gameTitleTextElement = document.getElementById("game-title-text");
 const turnCountTextElement = document.getElementById("turn-count-text");
 const typedTextElement = document.getElementById("typed-text");
 const introText = "Shall we play a game?";
+const inputLineElement = document.getElementById("input-line");
+const promptIndicator = document.getElementById("prompt-indicator");
+
+if (inputElement) {
+	const scheduleFocus = () => setTimeout(ensureInputFocus, 0);
+	window.addEventListener("focus", ensureInputFocus);
+	document.addEventListener("mousedown", scheduleFocus);
+	document.addEventListener("touchstart", scheduleFocus, { passive: true });
+}
 
 let gameKey = null;
 let turnCount = 0;
@@ -50,9 +59,11 @@ async function showGameSelector() {
 	updateOutputText(null, gameSelectString);
 
 	// Make the input-line visible
-	const inputLineElement = document.getElementById("input-line");
-	inputLineElement.classList.remove("hidden");
-	inputElement.focus();
+	if (inputLineElement) {
+		inputLineElement.classList.remove("hidden");
+	}
+	showPrompt();
+	ensureInputFocus();
 
 	// Get ready for player input
 	inputElement.addEventListener("keydown", (event) => {
@@ -105,73 +116,194 @@ async function processCommand(command) {
 
 	disableUserInput();
 	if (command.includes("Start Game:")) {
-		// Clean up this special case later...
-		inputElement.value = ""; // This is here because we already have
+		inputElement.value = "";
 	} else {
-		// a loader when starting a new game
 		inputElement.value = "Thinking...";
 	}
 
 	if (command.length > 100) {
+		enableUserInput();
 		return;
 	}
 
-	let response = await generateNextTurn(command);
+	const commandToDisplay = command.includes("Start Game:") ? "" : command;
+	const responseElement = appendCommandAndResponse(commandToDisplay);
 
-	if (command.includes("Start Game:")) {
-		// Clean up this special case later...
-		command = ""; // Shorten the command for display
+	try {
+		const result = await streamNextTurn(command, responseElement);
+		const responseData = result || {};
+
+		if (responseData.text) {
+			responseElement.innerHTML = renderMarkdown(responseData.text.trim());
+			scrollToBottom();
+		}
+
+		if (responseData.gameKey) {
+			gameKey = responseData.gameKey;
+		}
+
+		if (typeof responseData.turnCount === "number") {
+			turnCount = responseData.turnCount;
+			turnCountTextElement.textContent = "Turn: " + turnCount;
+		}
+
+		if (responseData.imagePrompt) {
+			displayImageLoader();
+			generateImage(responseData.imagePrompt);
+		}
+
+		const isGameOver =
+			responseData.gameOver === "true" ||
+			(responseData.text && responseData.text.includes("GAME OVER"));
+
+		if (isGameOver) {
+			endGameSession();
+			return;
+		}
+
+		enableUserInput();
+	} catch (error) {
+		console.error("Error generating next turn:", error);
+		hideLoader();
+		responseElement.textContent =
+			"An error occurred while processing your request. Please try again.";
+		enableUserInput();
+	} finally {
+		if (inputElement) {
+			inputElement.value = "";
+		}
+		ensureInputFocus();
 	}
-
-	// If the model determined Game Over, then... end the game (because this is a hack and you should fix it)
-	if (response.text.includes("GAME OVER")) {
-		gameOver(command, response.text);
-		return;
-	}
-
-	// If the game is over, then... end the game
-	if (response.gameOver == "true") {
-		gameOver(command, response.text);
-		return;
-	}
-
-	// Create a request to generate an image based on the descriptive prompt
-	if (response.imagePrompt) {
-		displayImageLoader();
-		generateImage(response.imagePrompt);
-	}
-
-	// Clear out the past command
-	inputElement.value = "";
-	inputElement.focus();
-
-	//Update the output text
-	updateOutputText(command, response.text);
-
-	// Update the turn counter
-	turnCount = response.turnCount;
-	turnCountTextElement.textContent = "Turn: " + turnCount;
 }
 
-async function generateNextTurn(command) {
-	let response = null;
+async function streamNextTurn(command, responseElement) {
+	const headers = {
+		"Content-Type": "application/json",
+	};
+
+	let payload;
 
 	if (command.includes("Start Game:")) {
-		let body = JSON.stringify({
+		payload = {
 			gameScenario: command.split(":")[1],
-		});
-
-		response = await makeRequest("/api/startGame", body);
-		gameKey = response.gameKey;
+		};
 	} else {
-		let body = JSON.stringify({
+		payload = {
 			gameKey: gameKey,
 			prompt: command,
-		});
-		response = await makeRequest("/api/generateNextTurn", body);
+		};
 	}
 
-	return response;
+	const response = await fetch("/api/generateNextTurn", {
+		method: "POST",
+		headers: headers,
+		body: JSON.stringify(payload),
+	});
+
+	if (!response.ok || !response.body) {
+		throw new Error("Failed to communicate with the server");
+	}
+
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = "";
+	let aggregatedRawText = "";
+	let finalPayload = null;
+	let doneReading = false;
+	let loaderCleared = false;
+
+	while (!doneReading) {
+		const { value, done } = await reader.read();
+		if (done) {
+			break;
+		}
+
+		buffer += decoder.decode(value, { stream: true });
+		const events = buffer.split("\n\n");
+		buffer = events.pop() || "";
+
+		for (const eventChunk of events) {
+			const eventLines = eventChunk.split("\n").filter((line) => line.trim() !== "");
+
+			for (const rawLine of eventLines) {
+				if (!rawLine.startsWith("data:")) {
+					continue;
+				}
+
+				const dataPayload = rawLine.slice(5).trim();
+
+				if (!dataPayload) {
+					continue;
+				}
+
+				if (dataPayload === "[DONE]") {
+					doneReading = true;
+					break;
+				}
+
+				let parsed;
+				try {
+					parsed = JSON.parse(dataPayload);
+				} catch (error) {
+					console.error("Failed to parse server stream payload:", dataPayload);
+					continue;
+				}
+
+				switch (parsed.type) {
+					case "delta": {
+						const deltaText = parsed.text || "";
+						aggregatedRawText += deltaText;
+					const displayText = aggregatedRawText.split("IMAGE_PROMPT")[0];
+					responseElement.innerHTML = renderMarkdown(displayText || "");
+						if (!loaderCleared) {
+							hideLoader();
+							loaderCleared = true;
+						}
+						scrollToBottom();
+						break;
+					}
+					case "complete": {
+						finalPayload = parsed.data || {};
+						if (finalPayload.text) {
+							aggregatedRawText = finalPayload.text;
+							responseElement.innerHTML = renderMarkdown(finalPayload.text);
+							scrollToBottom();
+						}
+						if (!loaderCleared) {
+							hideLoader();
+							loaderCleared = true;
+						}
+						break;
+					}
+					case "error": {
+						throw new Error(parsed.message || "Server error");
+					}
+					default:
+						break;
+				}
+			}
+		}
+	}
+
+	if (!loaderCleared) {
+		hideLoader();
+	}
+
+	if (!finalPayload) {
+		const [displayText, imagePromptText] = aggregatedRawText.split("IMAGE_PROMPT");
+		finalPayload = { text: (displayText || "").trim() };
+		if (imagePromptText) {
+			finalPayload.imagePrompt = imagePromptText.replace(/^[:\s]+/, "").trim();
+		}
+	} else if (!finalPayload.text) {
+		const [displayText, imagePromptText] = aggregatedRawText.split("IMAGE_PROMPT");
+		finalPayload.text = (displayText || "").trim();
+		if (!finalPayload.imagePrompt && imagePromptText) {
+			finalPayload.imagePrompt = imagePromptText.replace(/^[:\s]+/, "").trim();
+		}
+	}
+
+	return finalPayload;
 }
 
 async function generateImage(prompt) {
@@ -286,35 +418,48 @@ function hideImageLoader() {
 	}, interval);
 }
 
-function gameOver(command, gameOverString) {
+function endGameSession() {
 	gameInSession = false;
-
-	document.getElementById("loader").className = "hidden";
-	updateOutputText(command, gameOverString);
-	inputElement.textContent = "";
-	inputElement.removeEventListener("keydown", (event) => {});
-	inputElement.parentElement.remove();
+	if (inputElement) {
+		inputElement.value = "";
+		inputElement.disabled = true;
+		inputElement.blur();
+	}
+	if (inputLineElement) {
+		inputLineElement.classList.add("hidden");
+	}
+	hidePrompt();
+	hideLoader();
+	turnCountTextElement.textContent = "Turn: " + turnCount;
 }
 
 function updateOutputText(command, outputText) {
-	// Clear out the past command
-	inputElement.value = "";
-	inputElement.focus();
+	const responseElement = appendCommandAndResponse(command);
+	typeText(responseElement, outputText.trim(), 0, 10, enableUserInput);
+}
 
-	// Add command and response elements
+function appendCommandAndResponse(command) {
+	if (inputElement) {
+		inputElement.value = "";
+	}
+	ensureInputFocus();
+
 	if (command) {
 		const commandElement = document.createElement("div");
 		commandElement.className = "input-line";
-		commandElement.innerHTML = `<div class="prompt">> </div><div>${command.trim()}</div>`;
+		commandElement.innerHTML = `<div class="prompt">> </div><div>${escapeHtml(
+			command.trim()
+		)}</div>`;
 		outputElement.appendChild(commandElement);
 	}
 
 	const responseElement = document.createElement("div");
+	responseElement.className = "response-text";
 	outputElement.appendChild(responseElement);
 	outputElement.appendChild(document.createElement("br"));
+	scrollToBottom();
 
-	// Type the response text with animation
-	typeText(responseElement, outputText.trim(), 0, 10, enableUserInput);
+	return responseElement;
 }
 
 async function makeRequest(url, body = null) {
@@ -343,13 +488,66 @@ function scrollToBottom() {
 
 function typeText(element, text, index = 0, interval = 5, callback) {
 	if (index < text.length) {
-		element.innerHTML += text[index];
+		element.textContent += text[index];
 		setTimeout(() => typeText(element, text, index + 1, interval, callback), interval);
-	} else if (callback) {
-		callback();
+	} else {
+		element.innerHTML = renderMarkdown(text);
+		if (callback) {
+			callback();
+		}
 	}
 
 	if (outputElement) scrollToBottom();
+}
+
+function ensureInputFocus() {
+	if (!inputElement) {
+		return;
+	}
+
+	if (!document.hasFocus()) {
+		return;
+	}
+
+	if (inputLineElement && inputLineElement.classList.contains("hidden")) {
+		return;
+	}
+
+	if (!inputElement.disabled) {
+		inputElement.focus();
+	}
+}
+
+function showPrompt() {
+	if (promptIndicator) {
+		promptIndicator.classList.remove("hidden");
+	}
+}
+
+function hidePrompt() {
+	if (promptIndicator) {
+		promptIndicator.classList.add("hidden");
+	}
+}
+
+function escapeHtml(str) {
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#039;");
+}
+
+function renderMarkdown(text) {
+	const escaped = escapeHtml(text);
+	return escaped
+		.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+		.replace(/__(.+?)__/g, "<strong>$1</strong>")
+		.replace(/\*(.+?)\*/g, "<em>$1</em>")
+		.replace(/_(.+?)_/g, "<em>$1</em>")
+		.replace(/`([^`]+)`/g, "<code>$1</code>")
+		.replace(/\n/g, "<br>");
 }
 
 function formatTitle(string) {
@@ -363,14 +561,29 @@ function formatTitle(string) {
 }
 
 function enableUserInput() {
-	// Enable user input when we are ready to receive a command
+	if (!inputElement) {
+		return;
+	}
+
 	inputElement.disabled = false;
-	inputElement.focus();
+	showPrompt();
+	if (inputLineElement) {
+		inputLineElement.classList.remove("input-disabled");
+	}
+	ensureInputFocus();
 }
 
 function disableUserInput() {
-	// Disable user input while we process a command
+	if (!inputElement) {
+		return;
+	}
+
 	inputElement.disabled = true;
+	inputElement.blur();
+	hidePrompt();
+	if (inputLineElement) {
+		inputLineElement.classList.add("input-disabled");
+	}
 }
 
 function showLoader() {

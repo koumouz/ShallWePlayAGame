@@ -129,6 +129,10 @@ html {
 	color: #ffb000;
 }
 
+#prompt-indicator {
+	margin-right: 6px;
+}
+
 #input {
 	width: 500px;
 	border: none;

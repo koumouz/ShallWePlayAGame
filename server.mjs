@@ -27,9 +27,7 @@ if (process.env.DATABASE_URL) {
 }
 
 const sslFlag = (process.env.DATABASE_SSL || "").toLowerCase();
-const shouldUseSSL = sslFlag
-	? sslFlag === "true" || sslFlag === "1"
-	: process.env.NODE_ENV === "production";
+const shouldUseSSL = sslFlag ? sslFlag === "true" || sslFlag === "1" : process.env.NODE_ENV === "production";
 
 if (shouldUseSSL) {
 	databaseConfig.ssl = { rejectUnauthorized: false };
@@ -51,19 +49,18 @@ app.use(
 
 /* OpenAI API Endpoints */
 const OPENAI_API_KEY = process.env.API_KEY;
-const TEXT_API_URI = "https://api.openai.com/v1/chat/completions";
+const TEXT_API_URI = "https://api.openai.com/v1/responses";
 const IMAGE_API_URI = "https://api.openai.com/v1/images/generations";
-const IMAGE_MODEL = process.env.IMAGE_MODEL || "dall-e-3";
-const IMAGE_SIZE = process.env.IMAGE_SIZE || "1024x1024";
-const IMAGE_QUALITY =
-	process.env.IMAGE_QUALITY || (IMAGE_MODEL === "gpt-image-1" ? "high" : "standard");
 
 /* Constants and Globals */
-const maxTurns = 20;
+const maxTurns = 35;
 const createImages = true; //default: true
 const numMaxTokens = 1000; //default: 1000
 const temperature = 0.5; //default: 0.5
-const model = "gpt-4";
+const textModel = process.env.TEXT_MODEL || "gpt-4o";
+const IMAGE_MODEL = process.env.IMAGE_MODEL || "dall-e-3";
+const IMAGE_SIZE = process.env.IMAGE_SIZE || "1024x1024";
+const IMAGE_QUALITY = process.env.IMAGE_QUALITY || (IMAGE_MODEL === "gpt-image-1" ? "high" : "standard");
 const defaultGameScenario = "the_island";
 
 // Game Rules
@@ -123,29 +120,26 @@ app.post("/api/getAvailableGames", async (req, res) => {
 	}
 });
 
-app.post("/api/startGame", async (req, res) => {
-	try {
-		const gameScenario = req.body.gameScenario;
-
-		const response = await startGame(gameScenario);
-		res.send({ response });
-	} catch (error) {
-		console.error("Error starting the game", error);
-		res.status(500).send({ error: "An error occurred while processing your request." });
-	}
-});
-
 app.post("/api/generateNextTurn", async (req, res) => {
-	const gameKey = req.body.gameKey;
-	const prompt = req.body.prompt;
+	res.setHeader("Content-Type", "text/event-stream");
+	res.setHeader("Cache-Control", "no-cache, no-transform");
+	res.setHeader("Connection", "keep-alive");
+
+	if (typeof res.flushHeaders === "function") {
+		res.flushHeaders();
+	}
 
 	try {
-		const response = await generateNextTurn(gameKey, prompt);
-		res.type("application/json");
-		res.send({ response });
+		const finalPayload = await streamGameTurn(req.body, res);
+		res.write(`data: ${JSON.stringify({ type: "complete", data: finalPayload })}\n\n`);
+		res.write("data: [DONE]\n\n");
+		res.end();
 	} catch (error) {
 		console.error("Error generating a new turn:", error);
-		res.status(500).send({ error: "An error occurred while processing your request." });
+		const message = error?.message || "An error occurred while processing your request.";
+		res.write(`data: ${JSON.stringify({ type: "error", message: message })}\n\n`);
+		res.write("data: [DONE]\n\n");
+		res.end();
 	}
 });
 
@@ -184,31 +178,25 @@ async function startServer() {
 startServer();
 
 /* Methods */
-async function startGame(gameScenario) {
-	console.log("Starting New Game");
+async function streamGameTurn(requestBody, res) {
 	await ensureDbInitialized();
 
-	if (gameScenario == null) gameScenario = defaultGameScenario;
-
-	systemRulesPrompt = await loadPromptFromFile(promptFilePath + systemPromptPath + ".txt");
-	gameScenarioPrompt = await loadPromptFromFile(promptFilePath + "games/" + gameScenario);
-
-	return generateNextTurn(); // If no gameKey or command are sent, create a new game
-}
-
-async function generateNextTurn(gameKey, prompt) {
-	await ensureDbInitialized();
-
-	let currentTurnCount = 0;
+	let { gameKey, prompt, gameScenario } = requestBody || {};
 	let gameTurnHistory = [];
-	let isExistingGame = false;
+	let currentTurnCount = 0;
+	const isExistingGame = Boolean(gameKey);
 
-	if (gameKey == null) {
-		// If no gameKey is sent, create a new game
+	if (!isExistingGame) {
+		if (gameScenario == null) {
+			gameScenario = defaultGameScenario;
+		}
+
+		systemRulesPrompt = await loadPromptFromFile(promptFilePath + systemPromptPath + ".txt");
+		gameScenarioPrompt = await loadPromptFromFile(promptFilePath + "games/" + gameScenario);
+
 		gameTurnHistory.push({ role: "system", content: systemRulesPrompt });
 		gameTurnHistory.push({ role: "user", content: gameScenarioPrompt });
 	} else {
-		isExistingGame = true;
 		const storedSession = await loadGameProgress(gameKey);
 
 		if (!storedSession || !Array.isArray(storedSession.gameHistory)) {
@@ -237,58 +225,147 @@ async function generateNextTurn(gameKey, prompt) {
 		Authorization: `Bearer ${OPENAI_API_KEY}`,
 	};
 
-	const textRequestBody = JSON.stringify({
-		model: model,
-		messages: gameTurnHistory,
-		max_tokens: numMaxTokens,
-		n: 1,
-		stop: null,
+	const requestPayload = {
+		model: textModel,
+		input: formatHistoryForResponses(gameTurnHistory),
+		max_output_tokens: numMaxTokens,
 		temperature: temperature,
-	});
+		stream: true,
+	};
 
 	const textResponse = await fetch(TEXT_API_URI, {
 		method: "POST",
 		headers: headers,
-		body: textRequestBody,
+		body: JSON.stringify(requestPayload),
 	});
 
-	const textData = await textResponse.json();
-
-	if (!textData.choices || textData.choices.length === 0) {
-		console.error("Unexpected API response:", textData);
-
-		switch (textData.code) {
-			case "429":
-				console.error("Error: Open AI API quota exceeded");
-				return generateGameOverReponse(gameKey, "APIQuotaExceeded", currentTurnCount);
-			default:
-				console.error(
-					"Error: Something went wrong, probably with how the OpenAI API was called."
-				);
-				return generateGameOverReponse(gameKey, undefined, currentTurnCount);
+	if (!textResponse.ok) {
+		if (textResponse.status === 429) {
+			console.error("Error: OpenAI API quota exceeded");
+			return generateGameOverReponse(gameKey, "APIQuotaExceeded", currentTurnCount);
 		}
+
+		const errorPayload = await textResponse.text();
+		throw new Error(`OpenAI API error: ${errorPayload}`);
 	}
 
+	if (!textResponse.body) {
+		throw new Error("OpenAI API returned an empty response body");
+	}
+
+	const decoder = new TextDecoder();
+	let buffer = "";
+	let aggregatedText = "";
+	let streamClosed = false;
+
+	const processChunk = (chunkText) => {
+		buffer += chunkText;
+		const events = buffer.split("\n\n");
+		buffer = events.pop() || "";
+
+		for (const eventChunk of events) {
+			const eventLines = eventChunk.split("\n").filter((line) => line.trim() !== "");
+
+			for (const rawLine of eventLines) {
+				if (!rawLine.startsWith("data:")) {
+					continue;
+				}
+
+				const dataPayload = rawLine.slice(5).trim();
+
+				if (!dataPayload) {
+					continue;
+				}
+
+				if (dataPayload === "[DONE]") {
+					streamClosed = true;
+					continue;
+				}
+
+				let parsed;
+				try {
+					parsed = JSON.parse(dataPayload);
+				} catch (error) {
+					console.error("Failed to parse streaming payload:", dataPayload);
+					continue;
+				}
+
+				switch (parsed.type) {
+					case "response.output_text.delta": {
+						const deltaText = parsed.delta || "";
+						aggregatedText += deltaText;
+						res.write(`data: ${JSON.stringify({ type: "delta", text: deltaText })}\n\n`);
+						if (typeof res.flush === "function") {
+							res.flush();
+						}
+						break;
+					}
+					case "response.error": {
+						throw new Error(parsed.error?.message || "OpenAI streaming error");
+					}
+					default:
+						break;
+				}
+			}
+		}
+	};
+
+	if (typeof textResponse.body?.getReader === "function") {
+		const reader = textResponse.body.getReader();
+		while (!streamClosed) {
+			const { value, done } = await reader.read();
+			if (done) {
+				break;
+			}
+			if (value) {
+				const chunkText = typeof value === "string" ? value : decoder.decode(value, { stream: true });
+				processChunk(chunkText);
+			}
+		}
+	} else if (textResponse.body && typeof textResponse.body[Symbol.asyncIterator] === "function") {
+		for await (const chunk of textResponse.body) {
+			const chunkText =
+				typeof chunk === "string"
+					? chunk
+					: Buffer.isBuffer(chunk)
+					? chunk.toString()
+					: decoder.decode(chunk, { stream: true });
+
+			processChunk(chunkText);
+
+			if (streamClosed) {
+				break;
+			}
+		}
+	} else {
+		throw new Error("OpenAI API returned a non-streaming body");
+	}
+
+	aggregatedText = aggregatedText.trim();
+
 	if (!isExistingGame) {
-		// The gameKey is based on the first 50 characters of the rendered game scenario
-		gameKey = generateGameKey(textData.choices[0].message.content.substring(0, 50));
+		gameKey = generateGameKey(aggregatedText.substring(0, 50));
 		currentTurnCount = 1;
 	} else {
 		currentTurnCount++;
 	}
 
-	// Split the text response so we can get the image prompt out
-	const substrs = textData.choices[0].message.content.split("IMAGE_PROMPT");
-	let response = {};
-	response.gameKey = gameKey;
-	response.turnCount = currentTurnCount;
-	response.text = substrs[0];
-	response.imagePrompt = substrs[1];
-
-	gameTurnHistory.push({ role: "assistant", content: textData.choices[0].message.content });
+	gameTurnHistory.push({ role: "assistant", content: aggregatedText });
 	await saveGameProgress(gameKey, gameTurnHistory, currentTurnCount);
 
-	return response;
+	const substrs = aggregatedText.split("IMAGE_PROMPT");
+	const textResponseBody = substrs[0] ? substrs[0].trim() : aggregatedText;
+	let imagePrompt = null;
+	if (substrs.length > 1) {
+		imagePrompt = substrs[1].replace(/^[:\s]+/, "").trim();
+	}
+
+	return {
+		gameKey,
+		turnCount: currentTurnCount,
+		text: textResponseBody,
+		imagePrompt,
+	};
 }
 
 async function generateImage(prompt) {
@@ -375,6 +452,15 @@ function generateGameKey(gameScenarioString) {
 	return gameKey;
 }
 
+function formatHistoryForResponses(history) {
+	return history.map((entry) => {
+		const contentType = entry.role === "assistant" ? "output_text" : "input_text";
+		return {
+			role: entry.role,
+			content: [{ type: contentType, text: entry.content }],
+		};
+	});
+}
 
 function generateGameOverReponse(gameKey, reason, turnCount = 0) {
 	let response = {};
@@ -391,8 +477,7 @@ function generateGameOverReponse(gameKey, reason, turnCount = 0) {
 				"Do to the immense popularity of this game we have exceeded our capacity! Unfortunately it's game over for now, but we're working hard on recruiting more gnomes to power the AI machinery... Check back soon :)";
 			break;
 		case "sessionNotFound":
-			response.text =
-				"We couldn't find that game session. Please start a new adventure to continue playing.";
+			response.text = "We couldn't find that game session. Please start a new adventure to continue playing.";
 			break;
 		default:
 			response.text =
@@ -421,10 +506,9 @@ async function saveGameProgress(gameKey, gameHistory, turnCount) {
 
 async function loadGameProgress(gameKey) {
 	try {
-		const result = await pool.query(
-			"SELECT game_history, turn_count FROM game_sessions WHERE game_key = $1",
-			[gameKey]
-		);
+		const result = await pool.query("SELECT game_history, turn_count FROM game_sessions WHERE game_key = $1", [
+			gameKey,
+		]);
 
 		if (result.rows.length === 0) {
 			return null;
