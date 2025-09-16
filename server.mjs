@@ -6,7 +6,9 @@ import fs from "fs/promises";
 import session from "express-session";
 import dotenv from "dotenv";
 import crypto from "crypto";
-import redis from "redis";
+import pkg from "pg";
+
+const { Pool } = pkg;
 
 if (process.env.NODE_ENV !== "production") {
 	dotenv.config({ path: "./config.env" });
@@ -17,7 +19,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
-let turnCount = 0;
+
+const databaseConfig = {};
+
+if (process.env.DATABASE_URL) {
+	databaseConfig.connectionString = process.env.DATABASE_URL;
+}
+
+const sslFlag = (process.env.DATABASE_SSL || "").toLowerCase();
+const shouldUseSSL = sslFlag
+	? sslFlag === "true" || sslFlag === "1"
+	: process.env.NODE_ENV === "production";
+
+if (shouldUseSSL) {
+	databaseConfig.ssl = { rejectUnauthorized: false };
+}
+
+const pool = new Pool(databaseConfig);
+
+let dbInitialized = false;
 
 app.use(express.json({ limit: "50mb" }));
 app.use(
@@ -60,6 +80,30 @@ const gameOverString =
 	maxTurns +
 	" turns but we'll be expanding on this in the future. Thanks for playing!";
 /* End Constants and Globals */
+
+async function ensureDbInitialized() {
+	if (dbInitialized) {
+		return;
+	}
+
+	const createTableQuery = `
+		CREATE TABLE IF NOT EXISTS game_sessions (
+			game_key TEXT PRIMARY KEY,
+			game_history JSONB NOT NULL,
+			turn_count INTEGER NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+	`;
+
+	try {
+		await pool.query(createTableQuery);
+		dbInitialized = true;
+	} catch (error) {
+		console.error("Error initializing Postgres:", error);
+		throw error;
+	}
+}
 
 /* Routes */
 app.post("/api/getAvailableGames", async (req, res) => {
@@ -121,63 +165,73 @@ app.post("/api/generateImage", async (req, res) => {
 // Serve files from the public folder
 app.use(express.static(__dirname + "/public"));
 
-// Get the Reddis URL and then create the Redis client for managing game state
-const redisClient = redis.createClient({
-	url: process.env.REDIS_TLS_URL,
-	socket: {
-		tls: true,
-		rejectUnauthorized: false,
-	},
-});
+async function startServer() {
+	try {
+		await ensureDbInitialized();
+		app.listen(port, () => {
+			console.log(`Server is running on port ${port}`);
+		});
+	} catch (error) {
+		console.error("Failed to initialize the database:", error);
+		process.exit(1);
+	}
+}
 
-// Start the server
-app.listen(port, () => {
-	console.log(`Server is running on port ${port}`);
-});
+startServer();
 
 /* Methods */
 async function startGame(gameScenario) {
 	console.log("Starting New Game");
-	await connectRedisClient();
-
-	turnCount = null;
+	await ensureDbInitialized();
 
 	if (gameScenario == null) gameScenario = defaultGameScenario;
 
 	systemRulesPrompt = await loadPromptFromFile(promptFilePath + systemPromptPath + ".txt");
 	gameScenarioPrompt = await loadPromptFromFile(promptFilePath + "games/" + gameScenario);
 
-	let response = generateNextTurn(); // If no gameKey or command are sent, create a new game
-	return response;
+	return generateNextTurn(); // If no gameKey or command are sent, create a new game
 }
 
 async function generateNextTurn(gameKey, prompt) {
-	// If the turn count is maxed, then it's game over. Cuz this shit is expensive...
-	if (turnCount >= maxTurns) {
-		return generateGameOverReponse(gameKey, "turnLimitExceeded");
+	await ensureDbInitialized();
+
+	let currentTurnCount = 0;
+	let gameTurnHistory = [];
+	let isExistingGame = false;
+
+	if (gameKey == null) {
+		// If no gameKey is sent, create a new game
+		gameTurnHistory.push({ role: "system", content: systemRulesPrompt });
+		gameTurnHistory.push({ role: "user", content: gameScenarioPrompt });
+	} else {
+		isExistingGame = true;
+		const storedSession = await loadGameProgress(gameKey);
+
+		if (!storedSession || !Array.isArray(storedSession.gameHistory)) {
+			console.error("Game session not found for key", gameKey);
+			return generateGameOverReponse(gameKey, "sessionNotFound", currentTurnCount);
+		}
+
+		gameTurnHistory = storedSession.gameHistory;
+		currentTurnCount = storedSession.turnCount || 0;
+
+		if (currentTurnCount >= maxTurns) {
+			return generateGameOverReponse(gameKey, "turnLimitExceeded", currentTurnCount);
+		}
+
+		const sanitizedPrompt = sanitize(typeof prompt === "string" ? prompt : "");
+		const formattedPrompt = { role: "user", content: sanitizedPrompt };
+		gameTurnHistory.push(formattedPrompt);
+	}
+
+	if (createImages && gameTurnHistory.length > 0) {
+		gameTurnHistory[gameTurnHistory.length - 1].content += ". " + createImagePrompt;
 	}
 
 	const headers = {
 		"Content-Type": "application/json",
 		Authorization: `Bearer ${OPENAI_API_KEY}`,
 	};
-
-	let gameTurnHistory = [];
-
-	if (gameKey == null) {
-		// If no gameKey is sent, create a new game
-		gameTurnHistory.push({ role: "system", content: systemRulesPrompt }); // Now add in the system prompt
-		gameTurnHistory.push({ role: "user", content: gameScenarioPrompt }); // Send the game scenario creation prompt
-	} else {
-		gameTurnHistory = await loadGameProgress(gameKey); // Get the history of game turns to date. We need to send the complete history to the API to maintain state
-		prompt = sanitize(prompt); // Do a quick (and crude) check to make sure there are no security issues in the prompt
-		let formattedPrompt = { role: "user", content: prompt }; // Format the command so we can send to the model API
-		gameTurnHistory.push(formattedPrompt); // Finally add the new command
-	}
-
-	if (createImages) {
-		gameTurnHistory[gameTurnHistory.length - 1].content += ". " + createImagePrompt; // Append the "createImagePrompt" prompt to the final prompt, so we can have nice fancy image
-	}
 
 	const textRequestBody = JSON.stringify({
 		model: model,
@@ -201,37 +255,34 @@ async function generateNextTurn(gameKey, prompt) {
 
 		switch (textData.code) {
 			case "429":
-				// API Quota exceeded. Send a game over message and terminate the game
 				console.error("Error: Open AI API quota exceeded");
-				return generateGameOverReponse(gameKey, "APIQuotaExceeded");
-				break;
+				return generateGameOverReponse(gameKey, "APIQuotaExceeded", currentTurnCount);
 			default:
-				console.error("Error: Something went wrong, probably with how the OpenAI API was called.");
-				return generateGameOverReponse(gameKey);
-				break;
+				console.error(
+					"Error: Something went wrong, probably with how the OpenAI API was called."
+				);
+				return generateGameOverReponse(gameKey, undefined, currentTurnCount);
 		}
 	}
 
-	// If there was no gameKey, make one as it's a new game
-	if (gameKey == null) {
+	if (!isExistingGame) {
 		// The gameKey is based on the first 50 characters of the rendered game scenario
 		gameKey = generateGameKey(textData.choices[0].message.content.substring(0, 50));
-		turnCount = 1;
+		currentTurnCount = 1;
 	} else {
-		turnCount++;
+		currentTurnCount++;
 	}
 
 	// Split the text response so we can get the image prompt out
 	const substrs = textData.choices[0].message.content.split("IMAGE_PROMPT");
 	let response = {};
-	response.gameKey = gameKey; // Return the key back to the client, every time. It will need it to maintain state.
-	response.turnCount = turnCount;
+	response.gameKey = gameKey;
+	response.turnCount = currentTurnCount;
 	response.text = substrs[0];
 	response.imagePrompt = substrs[1];
 
-	// update the game state file. Remove the system prompt and add the most recent assistant response
 	gameTurnHistory.push({ role: "assistant", content: textData.choices[0].message.content });
-	await saveGameProgress(gameKey, gameTurnHistory);
+	await saveGameProgress(gameKey, gameTurnHistory, currentTurnCount);
 
 	return response;
 }
@@ -295,7 +346,8 @@ function generateGameKey(gameScenarioString) {
 	return gameKey;
 }
 
-function generateGameOverReponse(gameKey, reason) {
+
+function generateGameOverReponse(gameKey, reason, turnCount = 0) {
 	let response = {};
 	response.gameKey = gameKey;
 	response.turnCount = turnCount;
@@ -309,6 +361,10 @@ function generateGameOverReponse(gameKey, reason) {
 			response.text =
 				"Do to the immense popularity of this game we have exceeded our capacity! Unfortunately it's game over for now, but we're working hard on recruiting more gnomes to power the AI machinery... Check back soon :)";
 			break;
+		case "sessionNotFound":
+			response.text =
+				"We couldn't find that game session. Please start a new adventure to continue playing.";
+			break;
 		default:
 			response.text =
 				"ERROR: Something went wrong and you have encounted some weird and unknown bug. Check back soon, maybe it's fixed. Or maybe it's not. Welcome to our probabilistic future.";
@@ -318,27 +374,52 @@ function generateGameOverReponse(gameKey, reason) {
 	return response;
 }
 
-async function saveGameProgress(gameKey, gameHistory) {
+async function saveGameProgress(gameKey, gameHistory, turnCount) {
 	const gameHistoryJSON = JSON.stringify(gameHistory);
 
 	try {
-		const reply = await redisClient.set(gameKey, gameHistoryJSON);
+		await pool.query(
+			`INSERT INTO game_sessions (game_key, game_history, turn_count)
+			VALUES ($1, $2::jsonb, $3)
+			ON CONFLICT (game_key)
+			DO UPDATE SET game_history = EXCLUDED.game_history, turn_count = EXCLUDED.turn_count, updated_at = NOW()`,
+			[gameKey, gameHistoryJSON, turnCount]
+		);
 	} catch (error) {
-		console.error("Error saving game progress to Redis:", error);
+		console.error("Error saving game progress to Postgres:", error);
 	}
-	return;
 }
 
 async function loadGameProgress(gameKey) {
 	try {
-		const gameHistoryJSON = await redisClient.get(gameKey);
-		const gameHistory = JSON.parse(gameHistoryJSON);
+		const result = await pool.query(
+			"SELECT game_history, turn_count FROM game_sessions WHERE game_key = $1",
+			[gameKey]
+		);
 
-		return gameHistory;
+		if (result.rows.length === 0) {
+			return null;
+		}
+
+		const row = result.rows[0];
+		const rawHistory = row.game_history;
+		let gameHistory;
+
+		if (Array.isArray(rawHistory)) {
+			gameHistory = rawHistory;
+		} else if (typeof rawHistory === "string") {
+			gameHistory = JSON.parse(rawHistory);
+		} else if (rawHistory && typeof rawHistory === "object") {
+			gameHistory = rawHistory;
+		} else {
+			gameHistory = [];
+		}
+
+		return { gameHistory, turnCount: row.turn_count || 0 };
 	} catch (error) {
-		console.error("Error retrieving game progress from Redis:", error);
+		console.error("Error retrieving game progress from Postgres:", error);
 	}
-	return;
+	return null;
 }
 
 async function loadPromptFromFile(filePath) {
@@ -348,18 +429,6 @@ async function loadPromptFromFile(filePath) {
 	} catch (error) {
 		throw error;
 	}
-}
-
-async function connectRedisClient() {
-	redisClient.connect().catch((error) => {});
-
-	redisClient.on("connect", function () {
-		console.log("Connected to Redis!");
-	});
-
-	redisClient.on("error", function (error) {
-		console.error("Error connecting to Redis:", error);
-	});
 }
 
 /* Helper Methods */
