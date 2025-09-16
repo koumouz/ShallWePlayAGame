@@ -19,4 +19,5 @@ Every playthrough is unique! Check it out at https://www.shallweplayagame.ai
 ## Development Notes
 
 - Game state is now persisted in Postgres. Configure the `DATABASE_URL` environment variable (or rely on local Postgres defaults) before starting the server. Set `DATABASE_SSL=true` when connecting to managed providers (e.g. Heroku) from local development. A `game_sessions` table will be created automatically if it does not exist.
+- Image generation defaults to DALL·E 3 (`IMAGE_MODEL=dall-e-3`). Adjust the model, size, or quality with `IMAGE_MODEL`, `IMAGE_SIZE`, or `IMAGE_QUALITY` environment variables if you need different outputs or performance profiles.
 - Install dependencies with `npm install` (this adds the `pg` driver) and run the server with `npm start` or `npm run dev`.

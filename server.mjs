@@ -53,6 +53,10 @@ app.use(
 const OPENAI_API_KEY = process.env.API_KEY;
 const TEXT_API_URI = "https://api.openai.com/v1/chat/completions";
 const IMAGE_API_URI = "https://api.openai.com/v1/images/generations";
+const IMAGE_MODEL = process.env.IMAGE_MODEL || "dall-e-3";
+const IMAGE_SIZE = process.env.IMAGE_SIZE || "1024x1024";
+const IMAGE_QUALITY =
+	process.env.IMAGE_QUALITY || (IMAGE_MODEL === "gpt-image-1" ? "high" : "standard");
 
 /* Constants and Globals */
 const maxTurns = 20;
@@ -288,50 +292,75 @@ async function generateNextTurn(gameKey, prompt) {
 }
 
 async function generateImage(prompt) {
-	if (createImages == true && prompt != null) {
-		// Clean up the prompt in a lazy way (I will fix this eventually)
-		prompt = prompt.slice(0, -1) + imageStyle;
-		prompt = prompt.substring(2);
-		prompt = sanitize(prompt); // Do a quick (and crude) check to make sure there are no security issues in the prompt
-
-		const headers = {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${OPENAI_API_KEY}`,
-		};
-
-		const imageRequestBody = JSON.stringify({
-			model: "dall-e-3",
-			prompt: prompt,
-			num_images: 1,
-			size: "1024x1024",
-			response_format: "url",
-		});
-
-		const imageResponse = await fetch(IMAGE_API_URI, {
-			method: "POST",
-			headers: headers,
-			body: imageRequestBody,
-		});
-
-		const imageData = await imageResponse.json();
-		console.log(imageData);
-
-		if (!imageData.data || imageData.data.length === 0) {
-			console.error("Unexpected API response:", data.image);
-			throw new Error("Invalid response from DALL-E API");
-		}
-
-		const imageBufferResponse = await fetch(imageData.data[0].url);
-		const imageBuffer = await imageBufferResponse.arrayBuffer();
-
-		let payload = {};
-		payload.image = Buffer.from(imageBuffer);
-		payload.imageAltText = prompt;
-
-		return payload;
-	} else {
+	if (!createImages || !prompt) {
 		return null;
 	}
+
+	let imagePrompt = prompt;
+	const originalPrompt = imagePrompt;
+
+	if (imagePrompt.length > 0) {
+		imagePrompt = imagePrompt.slice(0, -1);
+	}
+
+	imagePrompt += imageStyle;
+
+	imagePrompt = imagePrompt.replace(/^[:\s]+/, "");
+	imagePrompt = sanitize(imagePrompt);
+
+	const headers = {
+		"Content-Type": "application/json",
+		Authorization: `Bearer ${OPENAI_API_KEY}`,
+	};
+
+	const requestPayload = {
+		model: IMAGE_MODEL,
+		prompt: imagePrompt,
+		size: IMAGE_SIZE,
+	};
+
+	if (IMAGE_QUALITY) {
+		requestPayload.quality = IMAGE_QUALITY;
+	}
+
+	const imageRequestBody = JSON.stringify(requestPayload);
+
+	const imageResponse = await fetch(IMAGE_API_URI, {
+		method: "POST",
+		headers: headers,
+		body: imageRequestBody,
+	});
+
+	if (!imageResponse.ok) {
+		const errorPayload = await imageResponse.text();
+		console.error("OpenAI image API error:", errorPayload);
+		throw new Error("Invalid response from OpenAI image API");
+	}
+
+	const imageData = await imageResponse.json();
+
+	if (!imageData?.data?.length) {
+		console.error("Unexpected image API response payload", imageData);
+		throw new Error("Invalid response from OpenAI image API");
+	}
+
+	let imageBuffer;
+
+	if (imageData.data[0].b64_json) {
+		imageBuffer = Buffer.from(imageData.data[0].b64_json, "base64");
+	} else if (imageData.data[0].url) {
+		const imageBufferResponse = await fetch(imageData.data[0].url);
+		const arrayBuffer = await imageBufferResponse.arrayBuffer();
+		imageBuffer = Buffer.from(arrayBuffer);
+	} else {
+		console.error("Unexpected image data payload", imageData.data[0]);
+		throw new Error("Invalid response from OpenAI image API");
+	}
+
+	return {
+		image: imageBuffer,
+		imageAltText: originalPrompt?.trim() || imagePrompt,
+	};
 }
 
 function generateGameKey(gameScenarioString) {
