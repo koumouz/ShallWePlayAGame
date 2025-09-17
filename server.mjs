@@ -38,13 +38,7 @@ const {
 		imageSize: IMAGE_SIZE,
 		imageQuality: IMAGE_QUALITY,
 	},
-	game: {
-		maxTurns,
-		createImages,
-		maxOutputTokens: numMaxTokens,
-		temperature,
-		defaultScenario: defaultGameScenario,
-	},
+	game: { maxTurns, createImages, maxOutputTokens: numMaxTokens, temperature, defaultScenario: defaultGameScenario },
 	prompts,
 } = config;
 
@@ -80,13 +74,11 @@ const CREATE_GAME_SESSIONS_TABLE_QUERY = `
 
 async function ensureDbInitialized() {
 	if (!dbInitializationPromise) {
-		dbInitializationPromise = pool
-			.query(CREATE_GAME_SESSIONS_TABLE_QUERY)
-			.catch((error) => {
-				dbInitializationPromise = null;
-				console.error("Error initializing Postgres:", error);
-				throw error;
-			});
+		dbInitializationPromise = pool.query(CREATE_GAME_SESSIONS_TABLE_QUERY).catch((error) => {
+			dbInitializationPromise = null;
+			console.error("Error initializing Postgres:", error);
+			throw error;
+		});
 	}
 
 	return dbInitializationPromise;
@@ -264,7 +256,7 @@ function buildConfig() {
 			imageQuality,
 		},
 		game: {
-			maxTurns: parseInteger(process.env.MAX_TURNS, 35),
+			maxTurns: parseInteger(process.env.MAX_TURNS, 20),
 			createImages: parseBoolean(process.env.CREATE_IMAGES, true),
 			maxOutputTokens: parseInteger(process.env.MAX_OUTPUT_TOKENS, 1000),
 			temperature: parseNumber(process.env.TEMPERATURE, 0.5),
@@ -365,9 +357,7 @@ async function streamGameTurn(requestBody, res) {
 
 	const { textResponseBody, imagePrompt: extractedImagePrompt } = extractImagePrompt(trimmedResponse);
 	const initialTurnFallbackPrompt =
-		!extractedImagePrompt && currentTurnCount === 1
-			? buildInitialImagePrompt(textResponseBody)
-			: null;
+		!extractedImagePrompt && currentTurnCount === 1 ? buildInitialImagePrompt(textResponseBody) : null;
 
 	return {
 		gameKey,
@@ -487,11 +477,8 @@ function appendImageInstruction(history) {
 	}
 
 	const trimmedTrailingWhitespace = lastMessage.content.replace(/\s+$/, "");
-	const needsTerminalPunctuation =
-		trimmedTrailingWhitespace !== "" && !/[.!?]$/.test(trimmedTrailingWhitespace);
-	const baseContent = needsTerminalPunctuation
-		? `${trimmedTrailingWhitespace}.`
-		: trimmedTrailingWhitespace;
+	const needsTerminalPunctuation = trimmedTrailingWhitespace !== "" && !/[.!?]$/.test(trimmedTrailingWhitespace);
+	const baseContent = needsTerminalPunctuation ? `${trimmedTrailingWhitespace}.` : trimmedTrailingWhitespace;
 	lastMessage.content = `${baseContent}${createImagePrompt}`;
 }
 
@@ -508,7 +495,11 @@ function extractImagePrompt(responseText) {
 		return { textResponseBody, imagePrompt: null };
 	}
 
-	const imagePrompt = segments.slice(1).join("IMAGE_PROMPT").replace(/^[:\s]+/, "").trim();
+	const imagePrompt = segments
+		.slice(1)
+		.join("IMAGE_PROMPT")
+		.replace(/^[:\s]+/, "")
+		.trim();
 
 	if (!imagePrompt) {
 		return { textResponseBody, imagePrompt: null };
@@ -780,17 +771,17 @@ function generateGameOverResponse(gameKey, reason, turnCount = 0) {
 	switch (reason) {
 		case "turnLimitExceeded":
 			response.text = gameOverString;
-		break;
-	case "APIQuotaExceeded":
-		response.text =
-			"Due to the immense popularity of this game we have exceeded our capacity! Unfortunately it's game over for now, but we're working hard on recruiting more gnomes to power the AI machinery... Check back soon :)";
-		break;
-	case "sessionNotFound":
-		response.text = "We couldn't find that game session. Please start a new adventure to continue playing.";
-		break;
-	default:
-		response.text =
-			"ERROR: Something went wrong and you have encountered some weird and unknown bug. Check back soon, maybe it's fixed. Or maybe it's not. Welcome to our probabilistic future.";
+			break;
+		case "APIQuotaExceeded":
+			response.text =
+				"Due to the immense popularity of this game we have exceeded our capacity! Unfortunately it's game over for now, but we're working hard on recruiting more gnomes to power the AI machinery... Check back soon :)";
+			break;
+		case "sessionNotFound":
+			response.text = "We couldn't find that game session. Please start a new adventure to continue playing.";
+			break;
+		default:
+			response.text =
+				"ERROR: Something went wrong and you have encountered some weird and unknown bug. Check back soon, maybe it's fixed. Or maybe it's not. Welcome to our probabilistic future.";
 			break;
 	}
 
