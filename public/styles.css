@@ -20,7 +20,10 @@ html {
 	padding-left: 10px;
 	padding-right: 10px;
 	border: 1px solid #ffa500;
+	box-sizing: border-box;
+	width: min(850px, calc(100% - 10px));
 	max-width: 850px;
+	margin: 5px;
 }
 
 #content {
