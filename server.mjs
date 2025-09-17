@@ -568,7 +568,7 @@ async function streamOpenAIImage(prompt, notify) {
 	}
 
 	if (typeof notify === "function") {
-		notify({ type: "status", message: "Requesting image from model..." });
+		notify({ type: "status", message: "Generating image..." });
 	}
 
 	const imageResponse = await fetch(IMAGE_API_URI, {
