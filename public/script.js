@@ -143,7 +143,7 @@ async function processCommand(command) {
 
 		const normalizedImagePrompt = normalizeImagePrompt(responseData.imagePrompt);
 		if (normalizedImagePrompt) {
-			generateImage(normalizedImagePrompt);
+			await generateImage(normalizedImagePrompt);
 		}
 
 		const isGameOver =
