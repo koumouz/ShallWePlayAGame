@@ -182,8 +182,8 @@ html {
 
 #input {
 	flex: 1 1 auto;
-	width: auto;
-	max-width: 500px;
+	width: 100%;
+	max-width: none;
 	min-width: 0;
 	border: none;
 	background: none;
@@ -193,6 +193,7 @@ html {
 	font-size: 12pt;
 }
 
+#input-line,
 .input-line {
 	display: flex;
 	align-items: center;
