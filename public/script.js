@@ -18,7 +18,6 @@ let gameKey = null;
 let turnCount = 0;
 let gameInSession = false;
 let availableGames = [];
-let imageLoaderState = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
 	const isMobile = /Mobile/.test(navigator.userAgent);
@@ -26,8 +25,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 		if (window.location.pathname !== "/index.html") {
 			window.location.replace("/index.html");
 		} else {
-			document.getElementById("footer-text").className = "hidden";
-			document.getElementById("terminal").style.width = "80%";
+			const footerElement = document.getElementById("footer-text");
+			if (footerElement) {
+				footerElement.className = "hidden";
+			}
+			const terminalElement = document.getElementById("terminal");
+			if (terminalElement) {
+				terminalElement.style.width = "80%";
+			}
 
 			let desktopBrowserText = "I'm sorry, mobile browsers are not supported.";
 			typeText(document.getElementById("intro-text"), desktopBrowserText, 0, 50);
@@ -36,6 +41,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 	} // Check to see if this is a mobile browser and if so, ask the user to use a desktop browser
 
 	if (document.getElementById("game-container")) {
+		hideImageContainer();
 		showGameSelector();
 	} else if (document.getElementById("intro-text")) {
 		// Display out quick intro and splash screen
@@ -90,6 +96,7 @@ async function startGame(gameScenario) {
 
 	// Start the game and get the initial scenario.
 	gameInSession = true;
+	showImageContainer();
 	turnCount = 0;
 	await processCommand("Start Game:" + gameScenario);
 
@@ -149,7 +156,6 @@ async function processCommand(command) {
 		}
 
 		if (responseData.imagePrompt) {
-			displayImageLoader();
 			generateImage(responseData.imagePrompt);
 		}
 
@@ -308,157 +314,190 @@ async function streamNextTurn(command, responseElement) {
 }
 
 async function generateImage(prompt) {
-	let body = JSON.stringify({ prompt: prompt });
+	if (!prompt) {
+		updateImageStatus("");
+		return;
+	}
 
-	// Make the request but don't parse the response as JSON
-	let response = await fetch("/api/generateImage", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: body,
-	});
+	updateImageStatus("Preparing image...");
+	showImageContainer();
 
-	if (response.ok) {
-		// Read the response as an ArrayBuffer
-		const imageBuffer = await response.arrayBuffer();
+	let finalEventHandled = false;
 
-		// Update the image
-		const imageBufferArray = new Uint8Array(imageBuffer);
-		const blob = new Blob([imageBufferArray], { type: "image/png" });
-		const imageElement = document.getElementById("game-image");
-		const canvas = document.createElement("canvas");
-		const ctx = canvas.getContext("2d");
+	try {
+		const response = await fetch("/api/generateImage", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ prompt }),
+		});
 
-		canvas.width = 256;
-		canvas.height = 256;
+		if (!response.ok || !response.body) {
+			throw new Error("Failed to communicate with the server");
+		}
 
-		const tempImage = new Image();
-		tempImage.src = URL.createObjectURL(blob);
-		tempImage.onload = function () {
-			ctx.drawImage(tempImage, 0, 0, 256, 256);
+		const reader = response.body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = "";
+		let doneReading = false;
 
-			// Set the globalCompositeOperation and fill with the tint color
-			ctx.globalCompositeOperation = "multiply";
-			ctx.fillStyle = "rgba(255, 165, 0, 0.8)";
-			ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-			imageElement.src = canvas.toDataURL();
-
-			// Set the alt text if available
-			if (response.headers.get("X-Image-Alt-Text")) {
-				imageElement.alt = response.headers.get("X-Image-Alt-Text");
+		while (!doneReading) {
+			const { value, done } = await reader.read();
+			if (done) {
+				break;
 			}
 
-			hideImageLoader();
-		};
+			if (!value) {
+				continue;
+			}
+
+			buffer += decoder.decode(value, { stream: true });
+			const events = buffer.split("\n\n");
+			buffer = events.pop() || "";
+
+			for (const eventChunk of events) {
+				const eventLines = eventChunk.split("\n").filter((line) => line.trim() !== "");
+
+				for (const rawLine of eventLines) {
+					if (!rawLine.startsWith("data:")) {
+						continue;
+					}
+
+					const dataPayload = rawLine.slice(5).trim();
+
+					if (!dataPayload) {
+						continue;
+					}
+
+					if (dataPayload === "[DONE]") {
+						doneReading = true;
+						break;
+					}
+
+					let parsed;
+					try {
+						parsed = JSON.parse(dataPayload);
+					} catch (error) {
+						console.error("Failed to parse image stream payload:", dataPayload);
+						continue;
+					}
+
+					const shouldStop = handleImageStreamEvent(parsed);
+					if (shouldStop) {
+						finalEventHandled = true;
+						doneReading = true;
+						break;
+					}
+				}
+
+				if (doneReading) {
+					break;
+				}
+			}
+		}
+
+		await reader.cancel().catch(() => {});
+
+		if (!finalEventHandled) {
+			updateImageStatus("");
+		}
+	} catch (error) {
+		console.error("Error generating image:", error);
+		updateImageStatus("Image generation failed. Please try again.");
+	}
+}
+
+function handleImageStreamEvent(event) {
+	if (!event || typeof event !== "object") {
+		return false;
+	}
+
+	switch (event.type) {
+		case "status": {
+			updateImageStatus(event.message || "");
+			break;
+		}
+		case "progress": {
+			if (typeof event.progress === "number") {
+				const constrained = Math.max(0, Math.min(100, Math.round(event.progress)));
+				updateImageStatus(`Generating image... ${constrained}%`);
+			} else if (event.message) {
+				updateImageStatus(event.message);
+			}
+			break;
+		}
+		case "complete": {
+			const payload = event.data || {};
+			if (payload.image) {
+				setImageFromBase64(payload.image, payload.altText || "");
+				updateImageStatus("");
+				return true;
+			}
+			break;
+		}
+		case "error": {
+			updateImageStatus(event.message || "Image generation failed.");
+			return true;
+		}
+		default:
+			break;
+	}
+
+	return false;
+}
+
+function setImageFromBase64(imageBase64, altText) {
+	const imageElement = document.getElementById("game-image");
+	if (!imageElement || !imageBase64) {
+		return;
+	}
+
+	const cleanedBase64 = imageBase64.replace(/\s+/g, "");
+	imageElement.src = `data:image/png;base64,${cleanedBase64}`;
+	if (typeof altText === "string" && altText.trim()) {
+		imageElement.alt = altText.trim();
+	}
+}
+
+function updateImageStatus(message) {
+	const statusElement = document.getElementById("image-status");
+	if (!statusElement) {
+		return;
+	}
+
+	const trimmed = typeof message === "string" ? message.trim() : "";
+	if (trimmed) {
+		statusElement.textContent = trimmed;
+		statusElement.classList.remove("hidden");
 	} else {
-		console.error("Error generating image:", response.statusText);
+		statusElement.textContent = "";
+		statusElement.classList.add("hidden");
 	}
 }
 
-function displayImageLoader() {
-	const imageElement = document.getElementById("game-image");
-	hideImageLoader({ skipFade: true });
-	imageElement.style.opacity = 0;
-
-	const canvasElement = document.createElement("canvas");
-	canvasElement.id = "loading-canvas";
-	canvasElement.width = 256;
-	canvasElement.height = 256;
-	document.getElementById("image-container").appendChild(canvasElement);
-
-	const ctx = canvasElement.getContext("2d");
-	const lineWidth = 4;
-	const linesPerColumn = canvasElement.height / lineWidth;
-	const fpsInterval = 1000 / 5;
-
-	const state = {
-		canvasElement,
-		ctx,
-		lineWidth,
-		linesPerColumn,
-		fpsInterval,
-		lastDrawTime: 0,
-		currentLine: 0,
-		cancelled: false,
-		rafId: null,
-		fadeInterval: null,
-	};
-
-	imageLoaderState = state;
-
-	function drawLine(timestamp) {
-		if (state.cancelled) {
-			return;
-		}
-
-		if (!state.lastDrawTime) {
-			state.lastDrawTime = timestamp;
+function showImageContainer() {
+	const container = document.getElementById("image-container");
+	if (!container) {
+		return;
 	}
 
-		if (timestamp - state.lastDrawTime >= state.fpsInterval) {
-			const y = state.currentLine * state.lineWidth;
-			state.ctx.fillStyle = "#ffa500";
-			state.ctx.fillRect(0, y, state.canvasElement.width, state.lineWidth);
-			state.currentLine++;
-			state.lastDrawTime = timestamp;
-		}
-
-		if (state.currentLine < state.linesPerColumn) {
-			state.rafId = requestAnimationFrame(drawLine);
-		}
-	}
-
-	state.rafId = requestAnimationFrame(drawLine);
+	container.classList.remove("hidden");
 }
 
-function hideImageLoader(options = {}) {
+function hideImageContainer() {
+	const container = document.getElementById("image-container");
+	if (!container) {
+		return;
+	}
+
+	if (!container.classList.contains("hidden")) {
+		container.classList.add("hidden");
+	}
+
+	updateImageStatus("");
 	const imageElement = document.getElementById("game-image");
-	const canvasElement = document.getElementById("loading-canvas");
-	const skipFade = Boolean(options.skipFade);
-
-	if (imageLoaderState) {
-		imageLoaderState.cancelled = true;
-		if (imageLoaderState.rafId) {
-			cancelAnimationFrame(imageLoaderState.rafId);
-		}
-		if (imageLoaderState.fadeInterval) {
-			clearInterval(imageLoaderState.fadeInterval);
-		}
-	}
-
-	if (!canvasElement) {
-		imageElement.style.opacity = 1;
-		imageLoaderState = null;
-		return;
-	}
-
-	if (skipFade) {
-		canvasElement.remove();
-		imageElement.style.opacity = 1;
-		imageLoaderState = null;
-		return;
-	}
-
-	imageElement.style.opacity = 0;
-
-	let opacity = 0;
-	const interval = 200;
-	const step = 0.15;
-
-	const fadeEffect = setInterval(function () {
-		if (opacity < 1) {
-			opacity += step;
-			imageElement.style.opacity = opacity;
-			canvasElement.style.opacity = 1 - opacity;
-		} else {
-			clearInterval(fadeEffect);
-			canvasElement.remove();
-			imageLoaderState = null;
-		}
-	}, interval);
-
-	if (imageLoaderState) {
-		imageLoaderState.fadeInterval = fadeEffect;
+	if (imageElement) {
+		imageElement.src = "images/smol.png";
+		imageElement.alt = "";
 	}
 }
 
@@ -475,6 +514,7 @@ function endGameSession() {
 	hidePrompt();
 	hideLoader();
 	turnCountTextElement.textContent = "Turn: " + turnCount;
+	hideImageContainer();
 }
 
 function updateOutputText(command, outputText) {

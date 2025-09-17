@@ -25,42 +25,58 @@ html {
 
 #content {
 	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: flex-start;
 	width: 100%;
-	justify-content: center;
 	padding-top: 10px;
+	gap: 16px;
 }
 
 #image-container {
-	position: relative;
-	flex-shrink: 0;
-	flex-grow: 0;
-	width: 256px;
+	position: sticky;
+	top: 30px;
+	width: 100%;
 	height: 256px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	overflow: hidden;
+	background-color: #111;
+	border-bottom: 1px solid #ffa500;
+	z-index: 1;
 }
 
-#game-image,
-#loading-canvas {
-	position: absolute;
-	top: 0;
-	left: 0;
+#game-image {
 	width: 100%;
 	height: 100%;
+	object-fit: cover;
+	image-rendering: pixelated;
+	display: block;
+}
+
+#image-status {
+	position: absolute;
+	bottom: 10px;
+	left: 50%;
+	transform: translateX(-50%);
+	padding: 4px 10px;
+	background-color: rgba(0, 0, 0, 0.75);
+	border: 1px solid #ffa500;
+	border-radius: 4px;
+	color: #ffa500;
+	font-size: 10pt;
+	max-width: calc(100% - 20px);
+	text-align: center;
 }
 
 #terminal {
-	width: 800px;
+	width: 100%;
+	max-width: 800px;
 	padding-left: 10px;
 	padding-right: 10px;
-	overflow-y: scroll;
 	padding-bottom: 20px;
 	box-sizing: border-box;
-	-ms-overflow-style: none; /* Internet Explorer 10+ */
-	scrollbar-width: none; /* Firefox */
-}
-
-#terminal::-webkit-scrollbar {
-	/* Chrome, Safari, and Edge */
-	display: none;
 }
 
 #intro {
@@ -151,8 +167,9 @@ html {
 #output {
 	color: #ffb000;
 	white-space: pre-wrap;
-	height: 400px;
-	overflow-y: scroll; /* add scrolling */
+	height: 300px;
+	max-height: 300px;
+	overflow-y: auto;
 	-ms-overflow-style: none; /* Internet Explorer 10+ */
 	scrollbar-width: none; /* Firefox */
 }
@@ -166,18 +183,8 @@ html {
 	margin-top: 15px;
 }
 
-.footer {
-	position: absolute;
-	bottom: 0;
-	padding-bottom: 20px;
-	width: 800px;
-	text-align: center;
-	font-size: 8pt;
-	color: #ffa500;
-}
-
 .hidden {
-	display: none;
+	display: none !important;
 }
 
 a {

@@ -60,7 +60,7 @@ const createImagePrompt =
 
 // Style prompt for the image, this is appended to all image prompts
 const imageStyle =
-	", no watermarks or text in the image, no colors, monochrome, black and white, in the style of an adventure game from the 1980s as pixel art.";
+	", pixelated, rendered like a mid 90s adventure game screenshot, amber gray-scale palette, no watermarks or text.";
 const gameOverString =
 	"You have reached the end of this game session. For now, games are limited to " +
 	maxTurns +
@@ -138,18 +138,48 @@ async function handleGenerateImage(req, res) {
 		return;
 	}
 
+	initializeSSE(res);
+
 	try {
-		const imagePayload = await generateImage(prompt);
-		if (!imagePayload) {
-			res.status(400).json({ error: "Unable to generate image for the provided prompt." });
-			return;
+		const { imageBuffer, imageAltText } = await streamOpenAIImage(prompt, (event) => {
+			if (!event) {
+				return;
+			}
+
+			switch (event.type) {
+				case "status": {
+					sendSSE(res, { type: "status", message: event.message });
+					break;
+				}
+				case "progress": {
+					sendSSE(res, { type: "progress", progress: event.progress });
+					break;
+				}
+				default:
+					break;
+			}
+		});
+
+		if (!imageBuffer || !imageBuffer.length) {
+			throw new Error("Image stream returned empty payload");
 		}
-		res.type("image/png");
-		res.set("X-Image-Alt-Text", convertToASCII(imagePayload.imageAltText));
-		res.send(imagePayload.image);
+
+		const base64Image = imageBuffer.toString("base64");
+		sendSSE(res, {
+			type: "complete",
+			data: {
+				image: base64Image,
+				altText: convertToASCII(imageAltText),
+			},
+		});
 	} catch (error) {
 		console.error("Error generating image:", error);
-		res.status(500).json({ error: "An error occurred while generating the image." });
+		sendSSE(res, {
+			type: "error",
+			message: "An error occurred while generating the image.",
+		});
+	} finally {
+		closeSSE(res);
 	}
 }
 
@@ -198,8 +228,8 @@ function buildConfig() {
 		throw new Error("API_KEY environment variable is required to start the server");
 	}
 
-	const imageModel = process.env.IMAGE_MODEL || "dall-e-3";
-	const imageQuality = process.env.IMAGE_QUALITY || (imageModel === "gpt-image-1" ? "high" : "standard");
+	const imageModel = process.env.IMAGE_MODEL || "gpt-image-1";
+	const imageQuality = process.env.IMAGE_QUALITY || "low";
 
 	const database = {};
 	if (process.env.DATABASE_URL) {
@@ -228,7 +258,7 @@ function buildConfig() {
 			apiKey,
 			textModel: process.env.TEXT_MODEL || "gpt-4o",
 			imageModel,
-			imageSize: process.env.IMAGE_SIZE || "1024x1024",
+			imageSize: process.env.IMAGE_SIZE || "1536x1024",
 			imageQuality,
 		},
 		game: {
@@ -476,14 +506,14 @@ function extractImagePrompt(responseText) {
 	return { textResponseBody, imagePrompt: imagePrompt || null };
 }
 
-async function generateImage(prompt) {
+async function streamOpenAIImage(prompt, notify) {
 	if (!createImages) {
-		return null;
+		return { imageBuffer: Buffer.alloc(0), imageAltText: "" };
 	}
 
 	const trimmedPrompt = typeof prompt === "string" ? prompt.trim() : "";
 	if (!trimmedPrompt) {
-		return null;
+		return { imageBuffer: Buffer.alloc(0), imageAltText: "" };
 	}
 
 	const promptWithoutTrailingPunctuation = trimmedPrompt.replace(/[.!?]+$/u, "");
@@ -491,7 +521,7 @@ async function generateImage(prompt) {
 	const sanitizedPrompt = sanitize(combinedPrompt);
 
 	if (!sanitizedPrompt) {
-		return null;
+		return { imageBuffer: Buffer.alloc(0), imageAltText: trimmedPrompt };
 	}
 
 	const headers = {
@@ -503,10 +533,15 @@ async function generateImage(prompt) {
 		model: IMAGE_MODEL,
 		prompt: sanitizedPrompt,
 		size: IMAGE_SIZE,
+		stream: true,
 	};
 
 	if (IMAGE_QUALITY) {
 		requestPayload.quality = IMAGE_QUALITY;
+	}
+
+	if (typeof notify === "function") {
+		notify({ type: "status", message: "Requesting image from model..." });
 	}
 
 	const imageResponse = await fetch(IMAGE_API_URI, {
@@ -521,29 +556,160 @@ async function generateImage(prompt) {
 		throw new Error("Invalid response from OpenAI image API");
 	}
 
-	const imageData = await imageResponse.json();
-
-	if (!imageData?.data?.length) {
-		console.error("Unexpected image API response payload", imageData);
-		throw new Error("Invalid response from OpenAI image API");
+	if (!imageResponse.body) {
+		throw new Error("OpenAI image API returned an empty body");
 	}
 
-	let imageBuffer;
+	const decoder = new TextDecoder();
+	let buffer = "";
+	const base64Chunks = [];
+	let altText = trimmedPrompt;
+	let chunkCounter = 0;
+	let streamClosed = false;
+	let reader = null;
 
-	if (imageData.data[0].b64_json) {
-		imageBuffer = Buffer.from(imageData.data[0].b64_json, "base64");
-	} else if (imageData.data[0].url) {
-		const imageBufferResponse = await fetch(imageData.data[0].url);
-		const arrayBuffer = await imageBufferResponse.arrayBuffer();
-		imageBuffer = Buffer.from(arrayBuffer);
+	const processPayload = (payload) => {
+		if (!payload || typeof payload !== "object") {
+			return;
+		}
+
+		if (payload.status && typeof notify === "function") {
+			notify({ type: "status", message: payload.status });
+		}
+
+		if (payload.progress && typeof notify === "function") {
+			notify({ type: "progress", progress: payload.progress });
+		}
+
+		const candidates = [];
+		if (Array.isArray(payload.data)) {
+			candidates.push(...payload.data);
+		}
+
+		if (payload.output) {
+			const outputArray = Array.isArray(payload.output) ? payload.output : [payload.output];
+			candidates.push(...outputArray);
+		}
+
+		if (payload.image) {
+			candidates.push(payload.image);
+		}
+
+		for (const candidate of candidates) {
+			if (candidate && typeof candidate === "object") {
+				if (candidate.b64_json) {
+					base64Chunks.push(candidate.b64_json);
+					chunkCounter++;
+					if (typeof notify === "function") {
+						notify({ type: "progress", progress: Math.min(chunkCounter * 25, 95) });
+					}
+				}
+				if (!altText && candidate.revised_prompt) {
+					altText = candidate.revised_prompt;
+				}
+				if (candidate.image_b64) {
+					base64Chunks.push(candidate.image_b64);
+				}
+			}
+		}
+
+		if (payload.revised_prompt && (!altText || altText === trimmedPrompt)) {
+			altText = payload.revised_prompt;
+		}
+
+		if (payload.b64_json) {
+			base64Chunks.push(payload.b64_json);
+		}
+	};
+
+	const processChunk = (chunkValue) => {
+		const chunkText =
+			typeof chunkValue === "string"
+				? chunkValue
+				: Buffer.isBuffer(chunkValue)
+				? chunkValue.toString()
+				: decoder.decode(chunkValue, { stream: true });
+
+		buffer += chunkText;
+		const events = buffer.split("\n\n");
+		buffer = events.pop() || "";
+
+		for (const eventChunk of events) {
+			const eventLines = eventChunk
+				.split("\n")
+				.map((line) => line.trim())
+				.filter((line) => line);
+
+			for (const line of eventLines) {
+				if (line === "data: [DONE]") {
+					streamClosed = true;
+					break;
+				}
+
+				if (!line.startsWith("data:")) {
+					continue;
+				}
+
+				const jsonPayload = line.slice(5).trim();
+
+				if (!jsonPayload || jsonPayload === "[DONE]") {
+					continue;
+				}
+
+				try {
+					const parsed = JSON.parse(jsonPayload);
+					processPayload(parsed);
+				} catch (error) {
+					console.error("Failed to parse streaming image payload:", jsonPayload);
+				}
+			}
+
+			if (streamClosed) {
+				break;
+			}
+		}
+	};
+
+	if (typeof imageResponse.body?.getReader === "function") {
+		reader = imageResponse.body.getReader();
+		while (!streamClosed) {
+			const { value, done } = await reader.read();
+			if (done) {
+				break;
+			}
+			if (!value) {
+				continue;
+			}
+			processChunk(value);
+		}
+	} else if (typeof imageResponse.body?.[Symbol.asyncIterator] === "function") {
+		for await (const chunk of imageResponse.body) {
+			processChunk(chunk);
+			if (streamClosed) {
+				break;
+			}
+		}
 	} else {
-		console.error("Unexpected image data payload", imageData.data[0]);
-		throw new Error("Invalid response from OpenAI image API");
+		throw new Error("OpenAI image API returned an unsupported body type");
 	}
+
+	if (reader && typeof reader.cancel === "function") {
+		await reader.cancel().catch(() => {});
+	}
+
+	if (typeof notify === "function") {
+		notify({ type: "status", message: "Finalizing image..." });
+	}
+
+	if (!base64Chunks.length) {
+		throw new Error("Image stream did not return any image data");
+	}
+
+	const imageBuffer = Buffer.from(base64Chunks.join(""), "base64");
 
 	return {
-		image: imageBuffer,
-		imageAltText: trimmedPrompt,
+		imageBuffer,
+		imageAltText: altText || trimmedPrompt,
 	};
 }
 
