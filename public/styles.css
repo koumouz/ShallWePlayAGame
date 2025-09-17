@@ -1,16 +1,29 @@
 body,
 html {
 	height: 100%;
+	min-height: 100vh;
 	width: 100%;
 	margin: 0;
 	font-family: "IBM Plex Mono", Arial, monospace;
 	font-size: 12pt;
 	background-color: black;
 	color: #ffa500;
+}
+
+.page-intro,
+.page-game {
 	display: flex;
 	justify-content: center;
 	align-items: center;
+	width: 100%;
+	min-height: 100vh;
 }
+
+.page-game {
+	padding: 10px;
+	box-sizing: border-box;
+}
+
 
 #game-container {
 	display: flex;
@@ -24,6 +37,8 @@ html {
 	width: min(850px, calc(100% - 10px));
 	max-width: 850px;
 	margin: 5px;
+	flex: 1;
+	min-height: 0;
 }
 
 #content {
@@ -34,6 +49,8 @@ html {
 	width: 100%;
 	padding-top: 10px;
 	gap: 16px;
+	flex: 1;
+	min-height: 0;
 }
 
 #image-container {
@@ -74,12 +91,18 @@ html {
 }
 
 #terminal {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 12px;
 	width: 100%;
 	max-width: 800px;
 	padding-left: 10px;
 	padding-right: 10px;
 	padding-bottom: 20px;
 	box-sizing: border-box;
+	flex: 1;
+	min-height: 0;
 }
 
 #intro {
@@ -90,6 +113,9 @@ html {
 	align-items: center;
 	position: relative;
 	text-align: center;
+	width: 100%;
+	padding: 20px;
+	box-sizing: border-box;
 }
 
 #login-form {
@@ -124,7 +150,9 @@ html {
 }
 
 #intro-text {
-	font-size: 20pt;
+	font-size: clamp(20px, 6vw, 32px);
+	max-width: 100%;
+	line-height: 1.4;
 }
 
 #title-bar {
@@ -153,7 +181,10 @@ html {
 }
 
 #input {
-	width: 500px;
+	flex: 1 1 auto;
+	width: auto;
+	max-width: 500px;
+	min-width: 0;
 	border: none;
 	background: none;
 	color: #ffa500;
@@ -165,6 +196,9 @@ html {
 .input-line {
 	display: flex;
 	align-items: center;
+	gap: 6px;
+	flex-wrap: nowrap;
+	width: 100%;
 }
 
 #output {
@@ -184,6 +218,35 @@ html {
 
 #enter-button {
 	margin-top: 15px;
+}
+
+.page-intro #terminal {
+	align-items: center;
+	text-align: center;
+	width: min(90vw, 480px);
+	margin: 0 auto;
+}
+
+.page-intro #intro-text {
+	word-break: normal;
+	max-inline-size: 100%;
+}
+
+.page-intro #enter-button {
+	align-self: center;
+}
+
+.page-game #terminal {
+	width: 100%;
+}
+
+.page-game #content {
+	width: 100%;
+}
+
+#output {
+	flex: 1;
+	min-height: 0;
 }
 
 .hidden {
@@ -214,4 +277,47 @@ button {
 button:hover {
 	background-color: #fdd835;
 	color: black;
+}
+
+@media (max-width: 600px) {
+	.page-game {
+		padding: 0;
+		align-items: stretch;
+		justify-content: flex-start;
+	}
+
+	#game-container {
+		width: 100vw;
+		max-width: none;
+		height: 100vh;
+		height: 100dvh;
+		margin: 0;
+		border-left-width: 0;
+		border-right-width: 0;
+		border-radius: 0;
+	}
+
+	#content {
+		padding: 10px;
+		gap: 12px;
+	}
+
+	#image-container {
+		position: relative;
+		top: 0;
+		height: min(40vh, 320px);
+	}
+
+	#terminal {
+		padding: 0 0 16px 0;
+	}
+
+	#output {
+		height: auto;
+		max-height: none;
+	}
+
+	#title-bar {
+		border-bottom: 1px solid #ffa500;
+	}
 }
