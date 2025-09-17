@@ -55,8 +55,10 @@ const promptPaths = {
 };
 
 // Prompt to tell the model to also generate an image prompt
-const createImagePrompt =
-	"\n\nFinally, create a prompt for DALL-E to create an image of the scene you just described. Keep the prompt as short and concise as possible. This should always be the last sentence of your response and it should begin with IMAGE_PROMPT:";
+const NO_IMAGE_CHANGE_SENTINEL = "NO IMAGE CHANGE";
+const createImagePrompt = `
+
+Finally, only create a prompt for DALL-E if the player entered a new room or location, or if they explicitly asked to look at something during this turn. Always treat the very first turn (the initial scenario) as a new location that requires an image prompt. Keep any prompt as short and concise as possible. This must always be the last sentence of your response and it must begin with IMAGE_PROMPT:. If nothing has changed and no look request was made, respond exactly with IMAGE_PROMPT: ${NO_IMAGE_CHANGE_SENTINEL}.`;
 
 // Style prompt for the image, this is appended to all image prompts
 const imageStyle =
@@ -362,12 +364,16 @@ async function streamGameTurn(requestBody, res) {
 	await saveGameProgress(gameKey, gameTurnHistory, currentTurnCount);
 
 	const { textResponseBody, imagePrompt: extractedImagePrompt } = extractImagePrompt(trimmedResponse);
+	const initialTurnFallbackPrompt =
+		!extractedImagePrompt && currentTurnCount === 1
+			? buildInitialImagePrompt(textResponseBody)
+			: null;
 
 	return {
 		gameKey,
 		turnCount: currentTurnCount,
 		text: textResponseBody,
-		imagePrompt: extractedImagePrompt,
+		imagePrompt: extractedImagePrompt || initialTurnFallbackPrompt,
 	};
 }
 
@@ -503,7 +509,37 @@ function extractImagePrompt(responseText) {
 	}
 
 	const imagePrompt = segments.slice(1).join("IMAGE_PROMPT").replace(/^[:\s]+/, "").trim();
-	return { textResponseBody, imagePrompt: imagePrompt || null };
+
+	if (!imagePrompt) {
+		return { textResponseBody, imagePrompt: null };
+	}
+
+	const normalized = imagePrompt.replace(/[.!?\s]+$/u, "").toUpperCase();
+	if (normalized.startsWith(NO_IMAGE_CHANGE_SENTINEL)) {
+		return { textResponseBody, imagePrompt: null };
+	}
+
+	return { textResponseBody, imagePrompt };
+}
+
+function buildInitialImagePrompt(responseText) {
+	if (!responseText || typeof responseText !== "string") {
+		return null;
+	}
+
+	const condensed = responseText.replace(/\s+/g, " ").trim();
+	if (!condensed) {
+		return null;
+	}
+
+	const sentenceMatch = condensed.match(/^[^.!?]+[.!?]?/);
+	const baseDescription = (sentenceMatch ? sentenceMatch[0] : condensed).trim();
+	if (!baseDescription) {
+		return null;
+	}
+
+	const truncated = baseDescription.length > 200 ? `${baseDescription.slice(0, 200).trim()}...` : baseDescription;
+	return `Adventure game scene: ${truncated}`;
 }
 
 async function streamOpenAIImage(prompt, notify) {

@@ -4,6 +4,7 @@ const gameTitleTextElement = document.getElementById("game-title-text");
 const turnCountTextElement = document.getElementById("turn-count-text");
 const typedTextElement = document.getElementById("typed-text");
 const introText = "Shall we play a game?";
+const NO_IMAGE_CHANGE_SENTINEL = "NO IMAGE CHANGE";
 const inputLineElement = document.getElementById("input-line");
 const promptIndicator = document.getElementById("prompt-indicator");
 
@@ -159,8 +160,9 @@ async function processCommand(command) {
 			turnCountTextElement.textContent = "Turn: " + turnCount;
 		}
 
-		if (responseData.imagePrompt) {
-			generateImage(responseData.imagePrompt);
+		const normalizedImagePrompt = normalizeImagePrompt(responseData.imagePrompt);
+		if (normalizedImagePrompt) {
+			generateImage(normalizedImagePrompt);
 		}
 
 		const isGameOver =
@@ -303,22 +305,45 @@ async function streamNextTurn(command, responseElement) {
 	if (!finalPayload) {
 		const [displayText, imagePromptText] = aggregatedRawText.split("IMAGE_PROMPT");
 		finalPayload = { text: (displayText || "").trim() };
-		if (imagePromptText) {
-			finalPayload.imagePrompt = imagePromptText.replace(/^[:\s]+/, "").trim();
+		const normalizedImagePrompt = normalizeImagePrompt(imagePromptText);
+		if (normalizedImagePrompt) {
+			finalPayload.imagePrompt = normalizedImagePrompt;
 		}
 	} else if (!finalPayload.text) {
 		const [displayText, imagePromptText] = aggregatedRawText.split("IMAGE_PROMPT");
 		finalPayload.text = (displayText || "").trim();
-		if (!finalPayload.imagePrompt && imagePromptText) {
-			finalPayload.imagePrompt = imagePromptText.replace(/^[:\s]+/, "").trim();
+		if (!finalPayload.imagePrompt) {
+			const normalizedImagePrompt = normalizeImagePrompt(imagePromptText);
+			if (normalizedImagePrompt) {
+				finalPayload.imagePrompt = normalizedImagePrompt;
+			}
 		}
 	}
 
 	return finalPayload;
 }
 
+function normalizeImagePrompt(rawPrompt) {
+	if (!rawPrompt) {
+		return null;
+	}
+
+	const trimmedPrompt = String(rawPrompt).replace(/^[:\s]+/, "").trim();
+	if (!trimmedPrompt) {
+		return null;
+	}
+
+	const normalized = trimmedPrompt.replace(/[.!?\s]+$/u, "").toUpperCase();
+	if (normalized.startsWith(NO_IMAGE_CHANGE_SENTINEL)) {
+		return null;
+	}
+
+	return trimmedPrompt;
+}
+
 async function generateImage(prompt) {
-	if (!prompt) {
+	const normalizedPrompt = normalizeImagePrompt(prompt);
+	if (!normalizedPrompt) {
 		updateImageStatus("");
 		return;
 	}
@@ -336,7 +361,7 @@ async function generateImage(prompt) {
 		const response = await fetch("/api/generateImage", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ prompt }),
+			body: JSON.stringify({ prompt: normalizedPrompt }),
 			signal: controller.signal,
 		});
 
