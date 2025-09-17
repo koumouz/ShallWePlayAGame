@@ -18,6 +18,7 @@ let gameKey = null;
 let turnCount = 0;
 let gameInSession = false;
 let availableGames = [];
+let activeImageAbortController = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
 	const isMobile = /Mobile/.test(navigator.userAgent);
@@ -104,6 +105,9 @@ async function startGame(gameScenario) {
 }
 
 async function processCommand(command) {
+	abortActiveImageRequest();
+	updateImageStatus("");
+
 	if (!gameInSession) {
 		// Yes, this is a little ugly. Hack the processCommand to treat game selection as a special case. I'll clean this up later.
 		const number = parseInt(command, 10);
@@ -323,12 +327,17 @@ async function generateImage(prompt) {
 	showImageContainer();
 
 	let finalEventHandled = false;
+	abortActiveImageRequest();
+
+	const controller = new AbortController();
+	activeImageAbortController = controller;
 
 	try {
 		const response = await fetch("/api/generateImage", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ prompt }),
+			signal: controller.signal,
 		});
 
 		if (!response.ok || !response.body) {
@@ -401,8 +410,15 @@ async function generateImage(prompt) {
 			updateImageStatus("");
 		}
 	} catch (error) {
+		if (error?.name === "AbortError") {
+			return;
+		}
 		console.error("Error generating image:", error);
 		updateImageStatus("Image generation failed. Please try again.");
+	} finally {
+		if (activeImageAbortController === controller) {
+			activeImageAbortController = null;
+		}
 	}
 }
 
@@ -494,10 +510,18 @@ function hideImageContainer() {
 	}
 
 	updateImageStatus("");
+	abortActiveImageRequest();
 	const imageElement = document.getElementById("game-image");
 	if (imageElement) {
 		imageElement.src = "images/smol.png";
 		imageElement.alt = "";
+	}
+}
+
+function abortActiveImageRequest() {
+	if (activeImageAbortController) {
+		activeImageAbortController.abort();
+		activeImageAbortController = null;
 	}
 }
 
