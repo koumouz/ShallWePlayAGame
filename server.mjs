@@ -123,6 +123,10 @@ const CREATE_GAME_SESSIONS_TABLE_QUERY = `
 `;
 /* End Constants and Globals */
 
+/**
+ * Lazily creates the backing Postgres table and caches the in-flight promise so
+ * concurrent requests all wait on the same initialization work.
+ */
 async function ensureDbInitialized() {
 	if (!dbInitializationPromise) {
 		dbInitializationPromise = pool.query(CREATE_GAME_SESSIONS_TABLE_QUERY).catch((error) => {
@@ -144,6 +148,10 @@ app.post("/api/generateImage", handleGenerateImage);
 // Serve files from the public folder
 app.use(express.static(join(__dirname, "public")));
 
+/**
+ * Lists available scenario files, filtering out invalid names before returning
+ * them to the client for the game picker UI.
+ */
 async function handleGetAvailableGames(req, res) {
 	try {
 		const allFiles = await fs.readdir(promptPaths.gamesDir);
@@ -162,6 +170,10 @@ async function handleGetAvailableGames(req, res) {
 	}
 }
 
+/**
+ * Streams the next turn of gameplay to the client while relaying status and
+ * error events over the SSE connection.
+ */
 async function handleGenerateNextTurn(req, res) {
 	initializeSSE(res);
 
@@ -177,6 +189,10 @@ async function handleGenerateNextTurn(req, res) {
 	}
 }
 
+/**
+ * Validates image prompts and proxies the request to OpenAI, streaming status
+ * updates and the resulting image back to the browser.
+ */
 async function handleGenerateImage(req, res) {
 	if (!createImages) {
 		res.status(503).json({ error: "Image generation is currently disabled." });
@@ -238,6 +254,9 @@ async function handleGenerateImage(req, res) {
 	}
 }
 
+/**
+ * Bootstraps the database and starts listening once initialization completes.
+ */
 async function startServer() {
 	try {
 		await ensureDbInitialized();
@@ -252,6 +271,9 @@ async function startServer() {
 
 startServer();
 
+/**
+ * Prepares the Express response object for server-sent events streaming.
+ */
 function initializeSSE(res) {
 	res.setHeader("Content-Type", "text/event-stream");
 	res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -262,6 +284,9 @@ function initializeSSE(res) {
 	}
 }
 
+/**
+ * Writes a single SSE payload to the response stream and flushes if possible.
+ */
 function sendSSE(res, payload) {
 	res.write(`data: ${JSON.stringify(payload)}\n\n`);
 	if (typeof res.flush === "function") {
@@ -269,11 +294,18 @@ function sendSSE(res, payload) {
 	}
 }
 
+/**
+ * Signals the end of the SSE stream to the client and closes the response.
+ */
 function closeSSE(res) {
 	res.write("data: [DONE]\n\n");
 	res.end();
 }
 
+/**
+ * Reads environment variables, applies defaults, and returns the runtime
+ * configuration object used by the server.
+ */
 function buildConfig() {
 	const env = process.env.NODE_ENV || "development";
 	const port = parseInteger(process.env.PORT, 3000);
@@ -347,6 +379,11 @@ function buildConfig() {
 }
 
 /* Methods */
+/**
+ * Orchestrates each gameplay turn: validates input, loads or seeds session
+ * history, streams the OpenAI response, persists progress, and returns the
+ * structured payload for the client.
+ */
 async function streamGameTurn(requestBody, res) {
 	await ensureDbInitialized();
 
@@ -468,6 +505,10 @@ async function streamGameTurn(requestBody, res) {
 	};
 }
 
+/**
+ * Consumes the streaming text endpoint, forwarding deltas to the caller while
+ * accumulating the full assistant reply.
+ */
 async function streamOpenAIResponse(response, onDelta) {
 	if (!response.body) {
 		throw new Error("OpenAI API returned an empty response body");
@@ -567,6 +608,10 @@ async function streamOpenAIResponse(response, onDelta) {
 	return aggregatedText.trim();
 }
 
+/**
+ * Appends the appropriate narration instruction for the selected mode to the
+ * player's prompt history so the model honors the preference.
+ */
 function applyNarrativeModeDirective(content, narrativeMode) {
 	const directive = NARRATIVE_MODE_DIRECTIVES[narrativeMode];
 	if (!directive) {
@@ -581,6 +626,10 @@ function applyNarrativeModeDirective(content, narrativeMode) {
 	return `${baseContent}\n\n${directive}`;
 }
 
+/**
+ * Ensures the latest user message ends with the image generation directive so
+ * the model knows when to produce a DALL·E prompt.
+ */
 function appendImageInstruction(history) {
 	if (!createImages || history.length === 0) {
 		return;
@@ -597,6 +646,10 @@ function appendImageInstruction(history) {
 	lastMessage.content = `${baseContent}${createImagePrompt}`;
 }
 
+/**
+ * Validates and normalizes the requested scenario name, enforcing the allowed
+ * filename pattern and length limits.
+ */
 function resolveScenarioFilename(rawScenario) {
 	const candidate = typeof rawScenario === "string" ? rawScenario.trim() : "";
 	const scenarioName = candidate || defaultGameScenario;
@@ -614,6 +667,10 @@ function resolveScenarioFilename(rawScenario) {
 	return normalized;
 }
 
+/**
+ * Splits the assistant response into human-facing text and the trailing
+ * IMAGE_PROMPT directive, returning both pieces.
+ */
 function extractImagePrompt(responseText) {
 	const segments = responseText.split("IMAGE_PROMPT");
 	const textResponseBody = segments[0] ? segments[0].trim() : responseText;
@@ -640,6 +697,10 @@ function extractImagePrompt(responseText) {
 	return { textResponseBody, imagePrompt };
 }
 
+/**
+ * Generates a fallback prompt for the first turn when the model does not
+ * supply an explicit image instruction.
+ */
 function buildInitialImagePrompt(responseText) {
 	if (!responseText || typeof responseText !== "string") {
 		return null;
@@ -660,6 +721,10 @@ function buildInitialImagePrompt(responseText) {
 	return `Adventure game scene: ${truncated}`;
 }
 
+/**
+ * Streams image generation updates from OpenAI, aggregating the base64 chunks
+ * into a final buffer while relaying progress notifications.
+ */
 async function streamOpenAIImage(prompt, notify) {
 	if (!createImages) {
 		return { imageBuffer: Buffer.alloc(0), imageAltText: "" };
@@ -867,6 +932,10 @@ async function streamOpenAIImage(prompt, notify) {
 	};
 }
 
+/**
+ * Derives a deterministic session key from the initial scenario text so the
+ * same opening description maps to a stable identifier.
+ */
 function generateGameKey(gameScenarioString) {
 	// Create the key for this session based on the initial scenario
 	// Take the first 50 characters of the first custom game response
@@ -879,6 +948,10 @@ function generateGameKey(gameScenarioString) {
 	return gameKey;
 }
 
+/**
+ * Normalizes player-provided narration mode values to the canonical options,
+ * defaulting to auto when input is unrecognized.
+ */
 function normalizeNarrativeMode(value) {
 	if (typeof value !== "string") {
 		return "auto";
@@ -896,6 +969,10 @@ function normalizeNarrativeMode(value) {
 	return "auto";
 }
 
+/**
+ * Transforms the local chat history into the content envelope expected by the
+ * OpenAI responses API.
+ */
 function formatHistoryForResponses(history) {
 	return history.map((entry) => {
 		const contentType = entry.role === "assistant" ? "output_text" : "input_text";
@@ -906,6 +983,10 @@ function formatHistoryForResponses(history) {
 	});
 }
 
+/**
+ * Builds a standardized game-over payload tailored to the reason the
+ * interaction ended.
+ */
 function generateGameOverResponse(gameKey, reason, turnCount = 0) {
 	let response = {};
 	response.gameKey = gameKey;
@@ -932,6 +1013,9 @@ function generateGameOverResponse(gameKey, reason, turnCount = 0) {
 	return response;
 }
 
+/**
+ * Upserts the current session history and turn counter into Postgres.
+ */
 async function saveGameProgress(gameKey, gameHistory, turnCount) {
 	const gameHistoryJSON = JSON.stringify(gameHistory);
 
@@ -948,6 +1032,9 @@ async function saveGameProgress(gameKey, gameHistory, turnCount) {
 	}
 }
 
+/**
+ * Fetches a stored session from Postgres and normalizes the JSON payload.
+ */
 async function loadGameProgress(gameKey) {
 	try {
 		const result = await pool.query("SELECT game_history, turn_count FROM game_sessions WHERE game_key = $1", [
@@ -979,6 +1066,10 @@ async function loadGameProgress(gameKey) {
 	return null;
 }
 
+/**
+ * Reads a prompt file from disk after confirming it resides within the
+ * expected prompts directory tree.
+ */
 async function loadPromptFromFile(filePath, allowedRoot = promptPaths.root) {
 	try {
 		const safePath = ensurePathWithinRoot(filePath, allowedRoot);
@@ -991,6 +1082,10 @@ async function loadPromptFromFile(filePath, allowedRoot = promptPaths.root) {
 }
 
 /* Helper Methods */
+/**
+ * Guards against directory traversal by confirming the requested file lives
+ * under the configured prompts root.
+ */
 function ensurePathWithinRoot(targetPath, rootDir) {
 	const normalizedRoot = resolve(rootDir);
 	const normalizedTarget = resolve(targetPath);
@@ -1009,6 +1104,9 @@ function ensurePathWithinRoot(targetPath, rootDir) {
 	return normalizedTarget;
 }
 
+/**
+ * Performs basic validation and trimming for user-supplied text fields.
+ */
 function validateTextInput(value, { fieldName = "Value", maxLength } = {}) {
 	const trimmed = typeof value === "string" ? value.trim() : "";
 
@@ -1023,6 +1121,9 @@ function validateTextInput(value, { fieldName = "Value", maxLength } = {}) {
 	return { valid: true, value: trimmed };
 }
 
+/**
+ * Parses integers from environment variables while honoring a fallback.
+ */
 function parseInteger(value, defaultValue) {
 	if (value == null) {
 		return defaultValue;
@@ -1032,6 +1133,9 @@ function parseInteger(value, defaultValue) {
 	return Number.isFinite(parsed) ? parsed : defaultValue;
 }
 
+/**
+ * Parses floats from environment variables while honoring a fallback.
+ */
 function parseNumber(value, defaultValue) {
 	if (value == null) {
 		return defaultValue;
@@ -1041,6 +1145,9 @@ function parseNumber(value, defaultValue) {
 	return Number.isFinite(parsed) ? parsed : defaultValue;
 }
 
+/**
+ * Parses boolean-like environment variable strings into actual booleans.
+ */
 function parseBoolean(value, defaultValue) {
 	if (value == null) {
 		return defaultValue;
@@ -1050,6 +1157,9 @@ function parseBoolean(value, defaultValue) {
 }
 
 // It does what it says on the tin
+/**
+ * Strips non-ASCII characters from a string, falling back to an empty value.
+ */
 function convertToASCII(str) {
 	if (typeof str !== "string") {
 		return "";
@@ -1059,6 +1169,9 @@ function convertToASCII(str) {
 }
 
 // Best (quick) effort at removing any potentially dangerous strings from user input
+/**
+ * Removes control characters and basic HTML markup to limit prompt injection.
+ */
 function sanitize(str) {
 	if (typeof str !== "string") {
 		return "";

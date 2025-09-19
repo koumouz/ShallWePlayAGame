@@ -97,6 +97,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 	}
 });
 
+/**
+ * Fetches the list of available scenarios and renders the initial game
+ * selection menu, wiring up the input prompt for player commands.
+ */
 async function showGameSelector() {
 	const response = await makeRequest("/api/getAvailableGames");
 	availableGames = response.games;
@@ -131,11 +135,17 @@ async function showGameSelector() {
 	});
 }
 
+/**
+ * Updates the UI with the chosen scenario and kicks off the initial turn.
+ */
 function selectGame(gameScenarioIndex) {
 	gameTitleTextElement.textContent = formatTitle(availableGames[gameScenarioIndex - 1]);
 	startGame(availableGames[gameScenarioIndex - 1]);
 }
 
+/**
+ * Resets session state and requests the opening turn for the selected game.
+ */
 async function startGame(gameScenario) {
 	showLoader();
 
@@ -158,6 +168,9 @@ async function startGame(gameScenario) {
 	hideLoader();
 }
 
+/**
+ * Trims and lowercases player input so command matching can ignore spacing.
+ */
 function normalizePlayerCommand(command) {
 	if (typeof command !== "string") {
 		return "";
@@ -166,12 +179,18 @@ function normalizePlayerCommand(command) {
 	return command.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+/**
+ * Echoes a system command back to the output log alongside markdown feedback.
+ */
 function respondToPlayerCommand(commandText, responseMarkdown) {
 	const responseElement = appendCommandAndResponse(commandText);
 	responseElement.innerHTML = renderMarkdown(responseMarkdown);
 	scrollToBottom();
 }
 
+/**
+ * Reveals the footer control bar if it exists in the DOM.
+ */
 function showFooterBar() {
 	if (!footerBarElement) {
 		return;
@@ -180,6 +199,9 @@ function showFooterBar() {
 	footerBarElement.classList.remove("hidden");
 }
 
+/**
+ * Hides the footer control bar and leaves it untouched when already hidden.
+ */
 function hideFooterBar() {
 	if (!footerBarElement) {
 		return;
@@ -190,6 +212,9 @@ function hideFooterBar() {
 	}
 }
 
+/**
+ * Syncs the image toggle button label and state with the current preference.
+ */
 function updateImageToggleUI() {
 	if (!imageToggleButton) {
 		return;
@@ -201,11 +226,17 @@ function updateImageToggleUI() {
 	imageToggleButton.classList.toggle("toggle-off", !imageGenerationEnabled);
 }
 
+/**
+ * Handles button clicks by toggling image generation and restoring focus.
+ */
 function handleImageToggleButtonClick() {
 	setImageGenerationEnabled(!imageGenerationEnabled);
 	ensureInputFocus();
 }
 
+/**
+ * Updates the image generation flag and performs any follow-up UI work.
+ */
 function setImageGenerationEnabled(enabled) {
 	const shouldEnable = Boolean(enabled);
 	if (shouldEnable === imageGenerationEnabled) {
@@ -232,6 +263,9 @@ function setImageGenerationEnabled(enabled) {
 	return { changed: true, status: "enabledWithImage" };
 }
 
+/**
+ * Regenerates the last prompt when images are re-enabled so the panel updates.
+ */
 async function regenerateImageAfterToggle() {
 	if (!lastImagePrompt) {
 		return;
@@ -251,6 +285,9 @@ async function regenerateImageAfterToggle() {
 	}
 }
 
+/**
+ * Coerces narrative mode input into the supported option identifiers.
+ */
 function normalizeNarrativeModeValue(value) {
 	if (typeof value !== "string") {
 		return "auto";
@@ -268,6 +305,9 @@ function normalizeNarrativeModeValue(value) {
 	return "auto";
 }
 
+/**
+ * Records the selected narrative mode and returns whether it changed.
+ */
 function setNarrativeMode(mode) {
 	const normalized = normalizeNarrativeModeValue(mode);
 	if (normalized === currentNarrativeMode) {
@@ -278,6 +318,10 @@ function setNarrativeMode(mode) {
 	return { changed: true, mode: currentNarrativeMode };
 }
 
+/**
+ * Interprets system-level commands (help, toggles, narration) before gameplay
+ * so they do not trigger API calls.
+ */
 function handlePlayerCommand(rawCommand) {
 	const normalizedCommand = normalizePlayerCommand(rawCommand);
 	if (!normalizedCommand) {
@@ -350,6 +394,10 @@ function handlePlayerCommand(rawCommand) {
 	return false;
 }
 
+/**
+ * Main entry point for player input: handles selection flow, system commands,
+ * and streaming turns from the backend.
+ */
 async function processCommand(command) {
 	abortActiveImageRequest();
 	updateImageStatus("");
@@ -466,6 +514,10 @@ async function processCommand(command) {
 	}
 }
 
+/**
+ * Streams a turn response from the server, progressively rendering markdown
+ * while collecting the final payload with metadata.
+ */
 async function streamNextTurn(command, responseElement) {
 	const headers = {
 		"Content-Type": "application/json",
@@ -602,6 +654,10 @@ async function streamNextTurn(command, responseElement) {
 	return finalPayload;
 }
 
+/**
+ * Cleans image prompt text and filters out sentinel values indicating no
+ * change.
+ */
 function normalizeImagePrompt(rawPrompt) {
 	if (!rawPrompt) {
 		return null;
@@ -620,6 +676,10 @@ function normalizeImagePrompt(rawPrompt) {
 	return trimmedPrompt;
 }
 
+/**
+ * Requests an image from the backend, streaming status updates to the UI and
+ * allowing the request to be aborted.
+ */
 async function generateImage(prompt) {
 	if (!imageGenerationEnabled) {
 		return;
@@ -730,6 +790,10 @@ async function generateImage(prompt) {
 	}
 }
 
+/**
+ * Processes individual SSE events from image generation, updating the screen
+ * or deciding when the stream is complete.
+ */
 function handleImageStreamEvent(event) {
 	if (!event || typeof event !== "object") {
 		return false;
@@ -769,6 +833,10 @@ function handleImageStreamEvent(event) {
 	return false;
 }
 
+/**
+ * Writes the generated image to the DOM using a base64 data URL and optional
+ * alt text.
+ */
 function setImageFromBase64(imageBase64, altText) {
 	const imageElement = document.getElementById("game-image");
 	if (!imageElement || !imageBase64) {
@@ -782,6 +850,9 @@ function setImageFromBase64(imageBase64, altText) {
 	}
 }
 
+/**
+ * Displays human-readable status text beneath the image panel.
+ */
 function updateImageStatus(message) {
 	const statusElement = document.getElementById("image-status");
 	if (!statusElement) {
@@ -798,6 +869,9 @@ function updateImageStatus(message) {
 	}
 }
 
+/**
+ * Makes the image container visible so newly generated art can be displayed.
+ */
 function showImageContainer() {
 	const container = document.getElementById("image-container");
 	if (!container) {
@@ -807,6 +881,10 @@ function showImageContainer() {
 	container.classList.remove("hidden");
 }
 
+/**
+ * Hides the image container, clears status text, and cancels any in-flight
+ * image request.
+ */
 function hideImageContainer() {
 	const container = document.getElementById("image-container");
 	if (!container) {
@@ -826,6 +904,9 @@ function hideImageContainer() {
 	}
 }
 
+/**
+ * Aborts any in-progress image fetch so a new one can start cleanly.
+ */
 function abortActiveImageRequest() {
 	if (activeImageAbortController) {
 		activeImageAbortController.abort();
@@ -833,6 +914,9 @@ function abortActiveImageRequest() {
 	}
 }
 
+/**
+ * Resets UI state when the adventure finishes or the session ends.
+ */
 function endGameSession() {
 	gameInSession = false;
 	lastImagePrompt = null;
@@ -851,11 +935,18 @@ function endGameSession() {
 	hideFooterBar();
 }
 
+/**
+ * Writes a command/response pair to the output log using the typing effect.
+ */
 function updateOutputText(command, outputText) {
 	const responseElement = appendCommandAndResponse(command);
 	typeText(responseElement, outputText.trim(), 0, 10, enableUserInput);
 }
 
+/**
+ * Appends a formatted command line and placeholder response element to the
+ * transcript, returning the response container.
+ */
 function appendCommandAndResponse(command) {
 	if (inputElement) {
 		inputElement.value = "";
@@ -880,6 +971,10 @@ function appendCommandAndResponse(command) {
 	return responseElement;
 }
 
+/**
+ * Issues a JSON POST request to the backend and returns the nested response
+ * payload, logging any errors for diagnostics.
+ */
 async function makeRequest(url, body = null) {
 	const headers = {
 		"Content-Type": "application/json",
@@ -900,10 +995,16 @@ async function makeRequest(url, body = null) {
 	}
 }
 
+/**
+ * Keeps the output log scrolled to the latest entry.
+ */
 function scrollToBottom() {
 	outputElement.scrollTo(0, outputElement.scrollHeight);
 }
 
+/**
+ * Types out text character-by-character before rendering the final markdown.
+ */
 function typeText(element, text, index = 0, interval = 5, callback) {
 	if (index < text.length) {
 		element.textContent += text[index];
@@ -918,6 +1019,9 @@ function typeText(element, text, index = 0, interval = 5, callback) {
 	if (outputElement) scrollToBottom();
 }
 
+/**
+ * Brings focus back to the command input when it is visible and enabled.
+ */
 function ensureInputFocus() {
 	if (!inputElement) {
 		return;
@@ -936,18 +1040,27 @@ function ensureInputFocus() {
 	}
 }
 
+/**
+ * Displays the input prompt caret.
+ */
 function showPrompt() {
 	if (promptIndicator) {
 		promptIndicator.classList.remove("hidden");
 	}
 }
 
+/**
+ * Hides the input prompt caret.
+ */
 function hidePrompt() {
 	if (promptIndicator) {
 		promptIndicator.classList.add("hidden");
 	}
 }
 
+/**
+ * Escapes HTML-sensitive characters before injecting user text into the DOM.
+ */
 function escapeHtml(str) {
 	return str
 		.replace(/&/g, "&amp;")
@@ -957,6 +1070,9 @@ function escapeHtml(str) {
 		.replace(/'/g, "&#039;");
 }
 
+/**
+ * Applies a small subset of markdown formatting to plain text content.
+ */
 function renderMarkdown(text) {
 	const escaped = escapeHtml(text);
 	return escaped
@@ -968,6 +1084,9 @@ function renderMarkdown(text) {
 		.replace(/\n/g, "<br>");
 }
 
+/**
+ * Converts a snake_case scenario filename into a human-friendly title.
+ */
 function formatTitle(string) {
 	let gameTitle = string.split(".")[0];
 	let words = gameTitle.split("_");
@@ -978,6 +1097,9 @@ function formatTitle(string) {
 	return gameTitle;
 }
 
+/**
+ * Re-enables the command input and restores prompt styling.
+ */
 function enableUserInput() {
 	if (!inputElement) {
 		return;
@@ -991,6 +1113,9 @@ function enableUserInput() {
 	ensureInputFocus();
 }
 
+/**
+ * Temporarily disables player input and removes visual focus cues.
+ */
 function disableUserInput() {
 	if (!inputElement) {
 		return;
@@ -1004,16 +1129,25 @@ function disableUserInput() {
 	}
 }
 
+/**
+ * Reveals the loading indicator with a standard message.
+ */
 function showLoader() {
 	document.getElementById("loader").textContent = "Loading, please wait...";
 	document.getElementById("loader").className = "";
 }
 
+/**
+ * Hides the loading indicator.
+ */
 function hideLoader() {
 	document.getElementById("loader").textContent = "";
 	document.getElementById("loader").className = "hidden";
 }
 
+/**
+ * Displays the splash screen enter button and wires its click handler.
+ */
 function showEnterButton() {
 	const enterButton = document.getElementById("enter-button");
 	enterButton.classList.remove("hidden");
@@ -1021,6 +1155,9 @@ function showEnterButton() {
 	enterButton.addEventListener("click", handleEnterButtonClick);
 }
 
+/**
+ * Navigates from the intro splash page to the main game interface.
+ */
 async function handleEnterButtonClick() {
 	// Redirect the user to the game.html page
 	window.location.href = "game.html";
