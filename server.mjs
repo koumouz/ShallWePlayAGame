@@ -96,6 +96,15 @@ const createImagePrompt = `
 
 Finally, only create a prompt for DALL-E if the player entered a new room or location, or if they explicitly asked to look at something during this turn. Always treat the very first turn (the initial scenario) as a new location that requires an image prompt. Keep any prompt as short and concise as possible. This must always be the last sentence of your response and it must begin with IMAGE_PROMPT:. If nothing has changed and no look request was made, respond exactly with IMAGE_PROMPT: ${NO_IMAGE_CHANGE_SENTINEL}.`;
 
+const NARRATIVE_MODE_DIRECTIVES = {
+	verbose:
+		"Player narration preference: respond in VERBOSE mode. Always provide a richly detailed room description that restates the location name, surroundings, notable objects, and available exits, even if the location is familiar. Do not mention this preference to the player.",
+	brief:
+		"Player narration preference: respond in BRIEF mode. Summarize only what changed this turn in no more than three concise sentences. Do not mention this preference to the player.",
+	superbrief:
+		"Player narration preference: respond in SUPERBRIEF mode. Reply with the shortest possible summary, ideally a single short sentence unless critical detail would be lost. Do not mention this preference to the player.",
+};
+
 // Style prompt for the image, this is appended to all image prompts
 const imageStyle =
 	", pixelated, rendered like a mid 90s adventure game screenshot, amber gray-scale palette, no watermarks or text.";
@@ -346,6 +355,7 @@ async function streamGameTurn(requestBody, res) {
 	}
 
 	const { gameKey: incomingGameKeyRaw, prompt, gameScenario } = requestBody;
+	const narrativeMode = normalizeNarrativeMode(requestBody?.narrativeMode);
 	const gameKeyIsString = typeof incomingGameKeyRaw === "string";
 	const incomingGameKey = gameKeyIsString ? incomingGameKeyRaw.trim() : incomingGameKeyRaw;
 
@@ -364,7 +374,8 @@ async function streamGameTurn(requestBody, res) {
 		]);
 
 		gameTurnHistory.push({ role: "system", content: systemRulesPrompt });
-		gameTurnHistory.push({ role: "user", content: gameScenarioPrompt });
+		const scenarioWithPreference = applyNarrativeModeDirective(gameScenarioPrompt, narrativeMode);
+		gameTurnHistory.push({ role: "user", content: scenarioWithPreference });
 	} else {
 		const storedSession = await loadGameProgress(gameKey);
 
@@ -393,7 +404,8 @@ async function streamGameTurn(requestBody, res) {
 		if (!sanitizedPrompt) {
 			throw new Error("Prompt must include at least one supported character.");
 		}
-		gameTurnHistory.push({ role: "user", content: sanitizedPrompt });
+		const promptWithPreference = applyNarrativeModeDirective(sanitizedPrompt, narrativeMode);
+		gameTurnHistory.push({ role: "user", content: promptWithPreference });
 	}
 
 	appendImageInstruction(gameTurnHistory);
@@ -553,6 +565,20 @@ async function streamOpenAIResponse(response, onDelta) {
 	}
 
 	return aggregatedText.trim();
+}
+
+function applyNarrativeModeDirective(content, narrativeMode) {
+	const directive = NARRATIVE_MODE_DIRECTIVES[narrativeMode];
+	if (!directive) {
+		return content;
+	}
+
+	const baseContent = typeof content === "string" ? content.trimEnd() : "";
+	if (!baseContent) {
+		return directive;
+	}
+
+	return `${baseContent}\n\n${directive}`;
 }
 
 function appendImageInstruction(history) {
@@ -851,6 +877,23 @@ function generateGameKey(gameScenarioString) {
 	const gameKey = "game_" + hash.digest("hex");
 
 	return gameKey;
+}
+
+function normalizeNarrativeMode(value) {
+	if (typeof value !== "string") {
+		return "auto";
+	}
+
+	const normalized = value.trim().toLowerCase();
+	if (normalized === "super brief") {
+		return "superbrief";
+	}
+
+	if (normalized === "verbose" || normalized === "brief" || normalized === "superbrief" || normalized === "auto") {
+		return normalized;
+	}
+
+	return "auto";
 }
 
 function formatHistoryForResponses(history) {

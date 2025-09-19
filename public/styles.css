@@ -39,6 +39,8 @@ html {
 	margin: 5px;
 	flex: 1;
 	min-height: 0;
+	height: min(780px, calc(100vh - 20px));
+	max-height: 780px;
 }
 
 #content {
@@ -51,6 +53,7 @@ html {
 	gap: 16px;
 	flex: 1;
 	min-height: 0;
+	height: 100%;
 }
 
 #image-container {
@@ -103,6 +106,7 @@ html {
 	box-sizing: border-box;
 	flex: 1;
 	min-height: 0;
+	height: 100%;
 }
 
 #intro {
@@ -168,6 +172,34 @@ html {
 	padding-right: 10px;
 }
 
+#game-title-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#turn-count-text {
+	flex: 0 0 auto;
+}
+
+#footer-bar {
+	width: 100%;
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 12px;
+	margin-top: 12px;
+	padding: 6px 10px 10px 10px;
+	height: 44px;
+	box-sizing: border-box;
+}
+
+#footer-bar.hidden {
+	display: none !important;
+}
+
 .title-text {
 	color: black;
 }
@@ -205,8 +237,8 @@ html {
 #output {
 	color: #ffb000;
 	white-space: pre-wrap;
-	height: 300px;
-	max-height: 300px;
+	flex: 1;
+	min-height: 0;
 	overflow-y: auto;
 	-ms-overflow-style: none; /* Internet Explorer 10+ */
 	scrollbar-width: none; /* Firefox */
@@ -280,6 +312,44 @@ button:hover {
 	color: black;
 }
 
+#image-toggle-button {
+	background: linear-gradient(145deg, #1b1b1b, #000000);
+	border: 1px solid #ffa500;
+	border-radius: 999px;
+	color: #ffa500;
+	font-size: 11pt;
+	letter-spacing: 0.5px;
+	margin: 0;
+	padding: 6px 20px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+	transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease,
+		color 0.15s ease;
+}
+
+#image-toggle-button.toggle-off {
+	background: linear-gradient(145deg, #292929, #131313);
+	color: #c9802f;
+	box-shadow: none;
+	opacity: 0.85;
+}
+
+#image-toggle-button:hover {
+	background: #ffb000;
+	color: #000;
+	box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+	transform: translateY(-1px);
+}
+
+#image-toggle-button:active {
+	transform: translateY(0);
+	box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+#image-toggle-button:focus-visible {
+	outline: 2px solid #000;
+	outline-offset: 2px;
+}
+
 @media (max-width: 600px) {
 	.page-game {
 		padding: 0;
@@ -292,6 +362,7 @@ button:hover {
 		max-width: none;
 		height: 100vh;
 		height: 100dvh;
+		max-height: none;
 		margin: 0;
 		border-left-width: 0;
 		border-right-width: 0;
@@ -320,5 +391,11 @@ button:hover {
 
 	#title-bar {
 		border-bottom: 1px solid #ffa500;
+	}
+
+	#footer-bar {
+		justify-content: center;
+		height: 44px;
+		padding: 6px 10px 10px 10px;
 	}
 }
