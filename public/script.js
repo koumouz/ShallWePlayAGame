@@ -7,6 +7,8 @@ const introText = "Shall we play a game?";
 const NO_IMAGE_CHANGE_SENTINEL = "NO IMAGE CHANGE";
 const inputLineElement = document.getElementById("input-line");
 const promptIndicator = document.getElementById("prompt-indicator");
+const imageToggleButton = document.getElementById("image-toggle-button");
+const footerBarElement = document.getElementById("footer-bar");
 
 if (inputElement) {
 	const scheduleFocus = () => setTimeout(ensureInputFocus, 0);
@@ -20,11 +22,74 @@ let turnCount = 0;
 let gameInSession = false;
 let availableGames = [];
 let activeImageAbortController = null;
+let imageGenerationEnabled = true;
+let lastImagePrompt = null;
+let currentNarrativeMode = "auto";
+
+const IMAGE_ENABLE_COMMANDS = new Set([
+	"enable images",
+	"images on",
+	"turn on images",
+	"enable image generation",
+	"show images",
+]);
+
+const IMAGE_DISABLE_COMMANDS = new Set([
+	"disable images",
+	"images off",
+	"turn off images",
+	"disable image generation",
+	"hide images",
+]);
+
+const NARRATIVE_MODE_COMMANDS = new Map([
+	["verbose", "verbose"],
+	["brief", "brief"],
+	["superbrief", "superbrief"],
+	["super brief", "superbrief"],
+	["normal", "auto"],
+	["standard", "auto"],
+	["reset narration", "auto"],
+]);
+
+const HELP_COMMANDS = new Set(["help", "?", "commands"]);
+
+const HELP_TEXT = [
+	"**System commands**",
+	"`enable images` / `images on` - resume generating scene art and show the image panel.",
+	"`disable images` / `images off` - stop creating scene art and hide the image panel.",
+	"`verbose` - always deliver full room descriptions with rich detail.",
+	"`brief` - keep responses short and focus on what is new this turn.",
+	"`superbrief` - respond with the quickest possible summary.",
+	"`normal` - return to the default narration style.",
+	"`help` - show this list again.",
+	"",
+	"You can also toggle images with the button at the bottom of the screen.",
+].join("\n");
+
+const NARRATIVE_MODE_LABELS = {
+	auto: "normal",
+	verbose: "verbose",
+	brief: "brief",
+	superbrief: "super brief",
+};
+
+const NARRATIVE_MODE_FEEDBACK = {
+	auto: "Narration reset to the default style.",
+	verbose: "Narration set to verbose mode. Expect full room descriptions each turn.",
+	brief: "Narration set to brief mode. I will focus on new details in a couple sentences.",
+	superbrief: "Narration set to super brief mode. I will reply with the fastest possible summary.",
+};
 
 
 document.addEventListener("DOMContentLoaded", async () => {
 	if (document.getElementById("game-container")) {
 		hideImageContainer();
+		hideFooterBar();
+		updateImageToggleUI();
+		if (imageToggleButton) {
+			imageToggleButton.addEventListener("click", handleImageToggleButtonClick);
+		}
 		showGameSelector();
 	} else if (document.getElementById("intro-text")) {
 		// Display out quick intro and splash screen
@@ -79,23 +144,239 @@ async function startGame(gameScenario) {
 
 	// Start the game and get the initial scenario.
 	gameInSession = true;
-	showImageContainer();
+	lastImagePrompt = null;
 	turnCount = 0;
+	if (imageGenerationEnabled) {
+		showImageContainer();
+	} else {
+		hideImageContainer();
+	}
+	showFooterBar();
+	turnCountTextElement.textContent = "Turn: " + turnCount;
 	await processCommand("Start Game:" + gameScenario);
 
 	hideLoader();
+}
+
+function normalizePlayerCommand(command) {
+	if (typeof command !== "string") {
+		return "";
+	}
+
+	return command.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function respondToPlayerCommand(commandText, responseMarkdown) {
+	const responseElement = appendCommandAndResponse(commandText);
+	responseElement.innerHTML = renderMarkdown(responseMarkdown);
+	scrollToBottom();
+}
+
+function showFooterBar() {
+	if (!footerBarElement) {
+		return;
+	}
+
+	footerBarElement.classList.remove("hidden");
+}
+
+function hideFooterBar() {
+	if (!footerBarElement) {
+		return;
+	}
+
+	if (!footerBarElement.classList.contains("hidden")) {
+		footerBarElement.classList.add("hidden");
+	}
+}
+
+function updateImageToggleUI() {
+	if (!imageToggleButton) {
+		return;
+	}
+
+	const label = imageGenerationEnabled ? "Images: On" : "Images: Off";
+	imageToggleButton.textContent = label;
+	imageToggleButton.setAttribute("aria-pressed", imageGenerationEnabled ? "true" : "false");
+	imageToggleButton.classList.toggle("toggle-off", !imageGenerationEnabled);
+}
+
+function handleImageToggleButtonClick() {
+	setImageGenerationEnabled(!imageGenerationEnabled);
+	ensureInputFocus();
+}
+
+function setImageGenerationEnabled(enabled) {
+	const shouldEnable = Boolean(enabled);
+	if (shouldEnable === imageGenerationEnabled) {
+		return { changed: false, status: shouldEnable ? "alreadyEnabled" : "alreadyDisabled" };
+	}
+
+	imageGenerationEnabled = shouldEnable;
+	updateImageToggleUI();
+
+	if (!shouldEnable) {
+		hideImageContainer();
+		return { changed: true, status: "disabled" };
+	}
+
+	if (!lastImagePrompt) {
+		updateImageStatus("");
+		return { changed: true, status: "enabledNoPrompt" };
+	}
+
+	regenerateImageAfterToggle().catch((error) => {
+		console.error("Error regenerating image after enabling:", error);
+		updateImageStatus("Image generation failed. Please try again.");
+	});
+	return { changed: true, status: "enabledWithImage" };
+}
+
+async function regenerateImageAfterToggle() {
+	if (!lastImagePrompt) {
+		return;
+	}
+
+	const inputWasDisabled = inputElement ? inputElement.disabled : false;
+	if (!inputWasDisabled) {
+		disableUserInput();
+	}
+
+	try {
+		await generateImage(lastImagePrompt);
+	} finally {
+		if (!inputWasDisabled) {
+			enableUserInput();
+		}
+	}
+}
+
+function normalizeNarrativeModeValue(value) {
+	if (typeof value !== "string") {
+		return "auto";
+	}
+
+	const normalized = value.trim().toLowerCase();
+	if (normalized === "super brief") {
+		return "superbrief";
+	}
+
+	if (normalized === "verbose" || normalized === "brief" || normalized === "superbrief" || normalized === "auto") {
+		return normalized;
+	}
+
+	return "auto";
+}
+
+function setNarrativeMode(mode) {
+	const normalized = normalizeNarrativeModeValue(mode);
+	if (normalized === currentNarrativeMode) {
+		return { changed: false, mode: currentNarrativeMode };
+	}
+
+	currentNarrativeMode = normalized;
+	return { changed: true, mode: currentNarrativeMode };
+}
+
+function handlePlayerCommand(rawCommand) {
+	const normalizedCommand = normalizePlayerCommand(rawCommand);
+	if (!normalizedCommand) {
+		return false;
+	}
+
+	if (HELP_COMMANDS.has(normalizedCommand)) {
+		respondToPlayerCommand(rawCommand, HELP_TEXT);
+		return true;
+	}
+
+	if (IMAGE_ENABLE_COMMANDS.has(normalizedCommand)) {
+		const result = setImageGenerationEnabled(true);
+		let message;
+		switch (result.status) {
+			case "alreadyEnabled": {
+				message = "Image generation is already enabled.";
+				break;
+			}
+			case "enabledWithImage": {
+				message = "Image generation enabled. Rendering the most recent scene now.";
+				break;
+			}
+			case "enabledNoPrompt": {
+				message = "Image generation enabled. I will draw the next scene as soon as a prompt arrives.";
+				break;
+			}
+			default: {
+				message = "Image generation enabled.";
+			}
+		}
+		respondToPlayerCommand(rawCommand, message);
+		return true;
+	}
+
+	if (IMAGE_DISABLE_COMMANDS.has(normalizedCommand)) {
+		const result = setImageGenerationEnabled(false);
+		let message;
+		switch (result.status) {
+			case "alreadyDisabled": {
+				message = "Image generation is already disabled.";
+				break;
+			}
+			case "disabled": {
+				message = "Image generation disabled. The image panel is hidden, but the latest prompt is saved.";
+				break;
+			}
+			default: {
+				message = "Image generation disabled.";
+			}
+		}
+		respondToPlayerCommand(rawCommand, message);
+		return true;
+	}
+
+	if (NARRATIVE_MODE_COMMANDS.has(normalizedCommand)) {
+		const targetMode = NARRATIVE_MODE_COMMANDS.get(normalizedCommand);
+		const result = setNarrativeMode(targetMode);
+		const label = NARRATIVE_MODE_LABELS[result.mode] || result.mode;
+		let message;
+		if (result.changed) {
+			message = NARRATIVE_MODE_FEEDBACK[result.mode] || `Narration set to ${label}.`;
+		} else {
+			message = `Narration is already set to ${label}.`;
+		}
+		respondToPlayerCommand(rawCommand, message);
+		return true;
+	}
+
+	return false;
 }
 
 async function processCommand(command) {
 	abortActiveImageRequest();
 	updateImageStatus("");
 
+	const trimmedCommand = typeof command === "string" ? command.trim() : "";
+	if (!trimmedCommand) {
+		if (inputElement) {
+			inputElement.value = "";
+		}
+		ensureInputFocus();
+		return;
+	}
+
 	if (!gameInSession) {
+		if (await handlePlayerCommand(trimmedCommand)) {
+			if (inputElement) {
+				inputElement.value = "";
+			}
+			ensureInputFocus();
+			return;
+		}
+
 		// Yes, this is a little ugly. Hack the processCommand to treat game selection as a special case. I'll clean this up later.
-		const number = parseInt(command, 10);
+		const number = parseInt(trimmedCommand, 10);
 		if (Number.isInteger(number) && number >= 1 && number <= availableGames.length) {
 			selectGame(number);
-		} else if (number == availableGames.length + 1) {
+		} else if (number === availableGames.length + 1) {
 			updateOutputText(
 				"",
 				"I'm sorry Professor, that game is no longer available. How about a different game?\n\nPlease enter a value [1 - " +
@@ -108,23 +389,31 @@ async function processCommand(command) {
 		return;
 	}
 
+	if (await handlePlayerCommand(trimmedCommand)) {
+		if (inputElement) {
+			inputElement.value = "";
+		}
+		ensureInputFocus();
+		return;
+	}
+
 	disableUserInput();
-	if (command.includes("Start Game:")) {
+	if (trimmedCommand.includes("Start Game:")) {
 		inputElement.value = "";
 	} else {
 		inputElement.value = "Thinking...";
 	}
 
-	if (command.length > 100) {
+	if (trimmedCommand.length > 100) {
 		enableUserInput();
 		return;
 	}
 
-	const commandToDisplay = command.includes("Start Game:") ? "" : command;
+	const commandToDisplay = trimmedCommand.includes("Start Game:") ? "" : trimmedCommand;
 	const responseElement = appendCommandAndResponse(commandToDisplay);
 
 	try {
-		const result = await streamNextTurn(command, responseElement);
+		const result = await streamNextTurn(trimmedCommand, responseElement);
 		const responseData = result || {};
 
 		if (responseData.text) {
@@ -143,7 +432,14 @@ async function processCommand(command) {
 
 		const normalizedImagePrompt = normalizeImagePrompt(responseData.imagePrompt);
 		if (normalizedImagePrompt) {
-			await generateImage(normalizedImagePrompt);
+			lastImagePrompt = normalizedImagePrompt;
+			if (imageGenerationEnabled) {
+				await generateImage(normalizedImagePrompt);
+			} else {
+				hideImageContainer();
+			}
+		} else if (!imageGenerationEnabled) {
+			hideImageContainer();
 		}
 
 		const isGameOver =
@@ -180,11 +476,13 @@ async function streamNextTurn(command, responseElement) {
 	if (command.includes("Start Game:")) {
 		payload = {
 			gameScenario: command.split(":")[1],
+			narrativeMode: currentNarrativeMode,
 		};
 	} else {
 		payload = {
 			gameKey: gameKey,
 			prompt: command,
+			narrativeMode: currentNarrativeMode,
 		};
 	}
 
@@ -323,6 +621,10 @@ function normalizeImagePrompt(rawPrompt) {
 }
 
 async function generateImage(prompt) {
+	if (!imageGenerationEnabled) {
+		return;
+	}
+
 	const normalizedPrompt = normalizeImagePrompt(prompt);
 	if (!normalizedPrompt) {
 		updateImageStatus("");
@@ -533,6 +835,7 @@ function abortActiveImageRequest() {
 
 function endGameSession() {
 	gameInSession = false;
+	lastImagePrompt = null;
 	if (inputElement) {
 		inputElement.value = "";
 		inputElement.disabled = true;
@@ -545,6 +848,7 @@ function endGameSession() {
 	hideLoader();
 	turnCountTextElement.textContent = "Turn: " + turnCount;
 	hideImageContainer();
+	hideFooterBar();
 }
 
 function updateOutputText(command, outputText) {
