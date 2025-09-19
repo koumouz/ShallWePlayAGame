@@ -1,11 +1,12 @@
 import express from "express";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { dirname, join, relative, resolve, sep } from "path";
 import fetch from "node-fetch";
 import fs from "fs/promises";
-import session from "express-session";
 import dotenv from "dotenv";
 import crypto from "crypto";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import pkg from "pg";
 
 const { Pool } = pkg;
@@ -22,8 +23,32 @@ const app = express();
 const pool = new Pool(config.database);
 let dbInitializationPromise = null;
 
-app.use(express.json({ limit: "50mb" }));
-app.use(session(config.session));
+app.disable("x-powered-by");
+if (config.env === "production") {
+	app.set("trust proxy", 1);
+}
+app.use(
+	helmet({
+		contentSecurityPolicy: false,
+		crossOriginEmbedderPolicy: false,
+	})
+);
+
+const requestRateLimiter = rateLimit({
+	windowMs: config.rateLimit.windowMs,
+	max: config.rateLimit.max,
+	standardHeaders: true,
+	legacyHeaders: false,
+});
+
+app.use(
+	"/api/",
+	requestRateLimiter
+);
+app.use(
+	"/api/",
+	express.json({ limit: config.limits.requestBody })
+);
 
 /* OpenAI API Endpoints */
 const TEXT_API_URI = "https://api.openai.com/v1/responses";
@@ -40,13 +65,30 @@ const {
 	},
 	game: { maxTurns, createImages, maxOutputTokens: numMaxTokens, temperature, defaultScenario: defaultGameScenario },
 	prompts,
+	limits,
 } = config;
+
+const {
+	prompt: promptMaxLength,
+	imagePrompt: imagePromptMaxLength,
+	scenarioName: scenarioNameMaxLength,
+} = limits;
 
 // Game Rules
 const promptPaths = {
 	systemRules: prompts.systemRules,
 	gamesDir: prompts.gamesDir,
+	root: prompts.root,
 };
+
+const VALID_SCENARIO_FILE_REGEX = /^[a-z0-9_-]+\.txt$/i;
+
+try {
+	resolveScenarioFilename(defaultGameScenario);
+} catch (error) {
+	console.error("Invalid default scenario configuration:", error.message);
+	process.exit(1);
+}
 
 // Prompt to tell the model to also generate an image prompt
 const NO_IMAGE_CHANGE_SENTINEL = "NO IMAGE CHANGE";
@@ -96,7 +138,14 @@ app.use(express.static(join(__dirname, "public")));
 async function handleGetAvailableGames(req, res) {
 	try {
 		const allFiles = await fs.readdir(promptPaths.gamesDir);
-		const games = allFiles.filter((file) => !file.startsWith("."));
+		const games = allFiles.filter((file) => {
+			if (!VALID_SCENARIO_FILE_REGEX.test(file)) {
+				return false;
+			}
+
+			const baseName = file.slice(0, -4);
+			return baseName.length > 0 && baseName.length <= scenarioNameMaxLength;
+		});
 		res.json({ response: { games } });
 	} catch (error) {
 		console.error("Error returning game directory", error);
@@ -125,17 +174,20 @@ async function handleGenerateImage(req, res) {
 		return;
 	}
 
-	const prompt = req.body?.prompt;
+	const promptValidation = validateTextInput(req.body?.prompt, {
+		fieldName: "Image prompt",
+		maxLength: imagePromptMaxLength,
+	});
 
-	if (!prompt || typeof prompt !== "string") {
-		res.status(400).json({ error: "An image prompt is required." });
+	if (!promptValidation.valid) {
+		res.status(400).json({ error: promptValidation.error });
 		return;
 	}
 
 	initializeSSE(res);
 
 	try {
-		const { imageBuffer, imageAltText } = await streamOpenAIImage(prompt, (event) => {
+		const { imageBuffer, imageAltText } = await streamOpenAIImage(promptValidation.value, (event) => {
 			if (!event) {
 				return;
 			}
@@ -224,6 +276,12 @@ function buildConfig() {
 
 	const imageModel = process.env.IMAGE_MODEL || "gpt-image-1";
 	const imageQuality = process.env.IMAGE_QUALITY || "low";
+	const requestBodyLimit = process.env.REQUEST_JSON_LIMIT || "1mb";
+	const promptMaxLength = parseInteger(process.env.MAX_PROMPT_LENGTH, 500);
+	const imagePromptMaxLength = parseInteger(process.env.MAX_IMAGE_PROMPT_LENGTH, 400);
+	const scenarioNameMaxLength = parseInteger(process.env.MAX_SCENARIO_LENGTH, 64);
+	const rateLimitWindowMs = Math.max(parseInteger(process.env.RATE_LIMIT_WINDOW_MS, 60_000), 1_000);
+	const rateLimitMax = Math.max(parseInteger(process.env.RATE_LIMIT_MAX, 60), 1);
 
 	const database = {};
 	if (process.env.DATABASE_URL) {
@@ -233,7 +291,12 @@ function buildConfig() {
 	const sslFlag = (process.env.DATABASE_SSL || "").toLowerCase();
 	const shouldUseSSL = sslFlag ? sslFlag === "true" || sslFlag === "1" : env === "production";
 	if (shouldUseSSL) {
-		database.ssl = { rejectUnauthorized: false };
+		const rejectUnauthorized = parseBoolean(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED, false);
+		database.ssl = { rejectUnauthorized };
+
+		if (process.env.DATABASE_SSL_CA) {
+			database.ssl.ca = process.env.DATABASE_SSL_CA;
+		}
 	}
 
 	const promptsRoot = join(__dirname, "prompts");
@@ -242,12 +305,6 @@ function buildConfig() {
 		env,
 		port,
 		database,
-		session: {
-			secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex"),
-			resave: false,
-			saveUninitialized: true,
-			cookie: { secure: env === "production" },
-		},
 		openAI: {
 			apiKey,
 			textModel: process.env.TEXT_MODEL || "gpt-4o",
@@ -267,6 +324,16 @@ function buildConfig() {
 			gamesDir: join(promptsRoot, "games"),
 			systemRules: join(promptsRoot, "system", "interactive_fiction.txt"),
 		},
+		limits: {
+			requestBody: requestBodyLimit,
+			prompt: promptMaxLength,
+			imagePrompt: imagePromptMaxLength,
+			scenarioName: scenarioNameMaxLength,
+		},
+		rateLimit: {
+			windowMs: rateLimitWindowMs,
+			max: rateLimitMax,
+		},
 	};
 }
 
@@ -274,7 +341,17 @@ function buildConfig() {
 async function streamGameTurn(requestBody, res) {
 	await ensureDbInitialized();
 
-	const { gameKey: incomingGameKey, prompt, gameScenario } = requestBody || {};
+	if (!requestBody || typeof requestBody !== "object") {
+		throw new Error("Invalid request payload.");
+	}
+
+	const { gameKey: incomingGameKeyRaw, prompt, gameScenario } = requestBody;
+	const gameKeyIsString = typeof incomingGameKeyRaw === "string";
+	const incomingGameKey = gameKeyIsString ? incomingGameKeyRaw.trim() : incomingGameKeyRaw;
+
+	if (incomingGameKey && (!gameKeyIsString || incomingGameKey.length > 128)) {
+		throw new Error("Invalid game key provided.");
+	}
 	let gameKey = incomingGameKey;
 	const gameTurnHistory = [];
 	let currentTurnCount = 0;
@@ -283,7 +360,7 @@ async function streamGameTurn(requestBody, res) {
 		const scenarioFile = resolveScenarioFilename(gameScenario ?? defaultGameScenario);
 		const [systemRulesPrompt, gameScenarioPrompt] = await Promise.all([
 			loadPromptFromFile(promptPaths.systemRules),
-			loadPromptFromFile(join(promptPaths.gamesDir, scenarioFile)),
+			loadPromptFromFile(join(promptPaths.gamesDir, scenarioFile), promptPaths.gamesDir),
 		]);
 
 		gameTurnHistory.push({ role: "system", content: systemRulesPrompt });
@@ -303,7 +380,19 @@ async function streamGameTurn(requestBody, res) {
 			return generateGameOverResponse(gameKey, "turnLimitExceeded", currentTurnCount);
 		}
 
-		const sanitizedPrompt = sanitize(typeof prompt === "string" ? prompt : "");
+		const promptValidation = validateTextInput(prompt, {
+			fieldName: "Prompt",
+			maxLength: promptMaxLength,
+		});
+
+		if (!promptValidation.valid) {
+			throw new Error(promptValidation.error);
+		}
+
+		const sanitizedPrompt = sanitize(promptValidation.value);
+		if (!sanitizedPrompt) {
+			throw new Error("Prompt must include at least one supported character.");
+		}
 		gameTurnHistory.push({ role: "user", content: sanitizedPrompt });
 	}
 
@@ -483,8 +572,20 @@ function appendImageInstruction(history) {
 }
 
 function resolveScenarioFilename(rawScenario) {
-	const scenario = typeof rawScenario === "string" && rawScenario.trim() ? rawScenario.trim() : defaultGameScenario;
-	return scenario.endsWith(".txt") ? scenario : `${scenario}.txt`;
+	const candidate = typeof rawScenario === "string" ? rawScenario.trim() : "";
+	const scenarioName = candidate || defaultGameScenario;
+	const normalized = scenarioName.endsWith(".txt") ? scenarioName : `${scenarioName}.txt`;
+
+	if (!VALID_SCENARIO_FILE_REGEX.test(normalized)) {
+		throw new Error("Invalid scenario name provided.");
+	}
+
+	const baseName = normalized.slice(0, -4);
+	if (!baseName || baseName.length > scenarioNameMaxLength) {
+		throw new Error("Invalid scenario name provided.");
+	}
+
+	return normalized;
 }
 
 function extractImagePrompt(responseText) {
@@ -835,9 +936,10 @@ async function loadGameProgress(gameKey) {
 	return null;
 }
 
-async function loadPromptFromFile(filePath) {
+async function loadPromptFromFile(filePath, allowedRoot = promptPaths.root) {
 	try {
-		const content = await fs.readFile(filePath, "utf8");
+		const safePath = ensurePathWithinRoot(filePath, allowedRoot);
+		const content = await fs.readFile(safePath, "utf8");
 		return content;
 	} catch (error) {
 		console.error(`Failed to load prompt file at ${filePath}`, error);
@@ -846,6 +948,38 @@ async function loadPromptFromFile(filePath) {
 }
 
 /* Helper Methods */
+function ensurePathWithinRoot(targetPath, rootDir) {
+	const normalizedRoot = resolve(rootDir);
+	const normalizedTarget = resolve(targetPath);
+	const relativePath = relative(normalizedRoot, normalizedTarget);
+
+	if (relativePath === "") {
+		return normalizedTarget;
+	}
+
+	const segments = relativePath.split(sep);
+	const hasTraversalSegment = segments.some((segment) => segment === ".." || segment.startsWith(".."));
+	if (relativePath.startsWith("..") || hasTraversalSegment) {
+		throw new Error("Attempted to access a file outside of the permitted directory.");
+	}
+
+	return normalizedTarget;
+}
+
+function validateTextInput(value, { fieldName = "Value", maxLength } = {}) {
+	const trimmed = typeof value === "string" ? value.trim() : "";
+
+	if (!trimmed) {
+		return { valid: false, error: `${fieldName} is required.` };
+	}
+
+	if (typeof maxLength === "number" && trimmed.length > maxLength) {
+		return { valid: false, error: `${fieldName} must be ${maxLength} characters or fewer.` };
+	}
+
+	return { valid: true, value: trimmed };
+}
+
 function parseInteger(value, defaultValue) {
 	if (value == null) {
 		return defaultValue;
@@ -887,15 +1021,8 @@ function sanitize(str) {
 		return "";
 	}
 
-	// Remove potential HTML elements
-	let sanitized = str.replace(/<[^>]*>/g, "");
-
-	// Remove potential ECMAScript method calls
-	sanitized = sanitized.replace(/\./g, "");
-
-	// Remove single quotes
-	sanitized = sanitized.replace(/'/g, "");
-
-	return sanitized;
+	const withoutControlCharacters = str.replace(/[\u0000-\u001F\u007F]+/g, "");
+	const withoutHtml = withoutControlCharacters.replace(/<[^>]*>/g, "");
+	return withoutHtml.trim();
 }
 /* End Helper Methods */
