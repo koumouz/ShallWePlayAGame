@@ -122,6 +122,10 @@ html {
 	box-sizing: border-box;
 }
 
+.page-intro #intro {
+	height: auto;
+}
+
 #login-form {
 	padding-top: 25px;
 	display: flex;
